@@ -1,0 +1,1 @@
+Le système de mise à jour GitHub est préparé. Consultez [docs/PUBLICATION.md](../docs/PUBLICATION.md). Le flux par défaut de l’application est désormais `https://raw.githubusercontent.com/angemort/onde-player/main/update.json`. Ce fichier ne sera créé qu'après la première Release signée.

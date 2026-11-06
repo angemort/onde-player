@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'fr.ondes.player'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'fr.ondes.player'
+        minSdk 26
+        targetSdk 34
+        versionCode 12
+        versionName '3.6.0'
+    }
+
+    // Signed releases are only built if all four variables are supplied.
+    def signingPath = System.getenv('ONDE_KEYSTORE_PATH')
+    def signingPass = System.getenv('ONDE_KEYSTORE_PASSWORD')
+    def signingAlias = System.getenv('ONDE_KEY_ALIAS')
+    def keyPass = System.getenv('ONDE_KEY_PASSWORD')
+    if (signingPath && signingPass && signingAlias && keyPass) {
+        signingConfigs {
+            release {
+                storeFile file(signingPath)
+                storePassword signingPass
+                keyAlias signingAlias
+                keyPassword keyPass
+            }
+        }
+        buildTypes {
+            release { signingConfig signingConfigs.release }
+        }
+    }
+
+    // PHONE AS can leave .trashed-*.java editor backups next to real sources.
+    // They must never be compiled as duplicate public Java classes.
+    sourceSets {
+        main {
+            java.exclude '**/.trashed-*.java'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

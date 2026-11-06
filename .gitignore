@@ -1,0 +1,19 @@
+.gradle/
+.idea/
+*.iml
+local.properties
+build/
+app/build/
+*.log
+.DS_Store
+# Android release signing secrets - never commit them
+*.jks
+*.keystore
+*.p12
+*.apk
+*.aab
+.env
+.env.*
+!.env.example
+# Temporary local build artifacts
+*.zip.base64

@@ -1,0 +1,76 @@
+name: Android - Release signée
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag existant à publier (ex: v3.6.0)'
+        type: string
+        required: true
+permissions:
+  contents: write
+jobs:
+  signed-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier que la clé de signature est configurée
+        env:
+          KEYSTORE_B64: ${{ secrets.ONDE_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.ONDE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ONDE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ONDE_KEY_PASSWORD }}
+        run: |
+          for field in KEYSTORE_B64 STORE_PASS KEY_ALIAS KEY_PASS; do
+            if [ -z "${!field}" ]; then
+              echo "Missing GitHub secret: $field"
+              exit 1
+            fi
+          done
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.2.1'
+      - name: Installer le SDK Android
+        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Préparer la clé et vérifier la version
+        env:
+          KEYSTORE_B64: ${{ secrets.ONDE_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.ONDE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ONDE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ONDE_KEY_PASSWORD }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/onde-release.jks"
+          echo "ONDE_KEYSTORE_PATH=$RUNNER_TEMP/onde-release.jks" >> "$GITHUB_ENV"
+          echo "ONDE_KEYSTORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
+          echo "ONDE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ONDE_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+          python3 scripts/check_release.py "$RELEASE_TAG"
+      - name: Compiler l'APK signé
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Nommer l'APK et calculer son empreinte
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "OndePlayer-${RELEASE_TAG#v}.apk"
+          sha256sum "OndePlayer-${RELEASE_TAG#v}.apk"
+      - name: Publier GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: OndePlayer-*.apk
+      - name: Mettre à jour le manifeste public
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 scripts/publish_manifest.py

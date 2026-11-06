@@ -1,0 +1,10 @@
+Onde Player V2.1 : correctif Gradle/JDK Android IDE PHONE AS
+
+Pour ce telephone, Java 17 existe dans /home/test/.local/jdk-17.
+
+1. Dezippez l archive et ouvrez le dossier OndePlayer_V2_1_AndroidIDE dans Android IDE.
+2. Compilez avec Play.
+3. Si l IDE force encore Java 8, ouvrez le terminal et, depuis le dossier du projet, lancez :
+   sh compiler_sur_androidide.sh
+
+La compilation doit encore etre testee sur le telephone.
