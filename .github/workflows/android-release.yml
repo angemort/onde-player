@@ -1,13 +1,6 @@
 name: Android - Release signée
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag existant à publier (ex: v3.6.0)'
-        type: string
-        required: true
 permissions:
   contents: write
 jobs:
@@ -28,8 +21,12 @@ jobs:
             fi
           done
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - name: Identifier automatiquement la version
+        id: version
+        run: |
+          VERSION=$(awk '/versionName/ {gsub(/\047|\042/, "", $2); print $2; exit}' app/build.gradle)
+          test -n "$VERSION"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -47,7 +44,7 @@ jobs:
           STORE_PASS: ${{ secrets.ONDE_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ONDE_KEY_ALIAS }}
           KEY_PASS: ${{ secrets.ONDE_KEY_PASSWORD }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/onde-release.jks"
           echo "ONDE_KEYSTORE_PATH=$RUNNER_TEMP/onde-release.jks" >> "$GITHUB_ENV"
@@ -59,19 +56,20 @@ jobs:
         run: gradle --no-daemon :app:assembleRelease
       - name: Nommer l'APK et calculer son empreinte
         env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk "OndePlayer-${RELEASE_TAG#v}.apk"
           sha256sum "OndePlayer-${RELEASE_TAG#v}.apk"
       - name: Publier GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: OndePlayer-*.apk
       - name: Mettre à jour le manifeste public
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
           GH_REPO: ${{ github.repository }}
         run: python3 scripts/publish_manifest.py
