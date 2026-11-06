@@ -119,6 +119,7 @@ public final class MainActivity extends Activity {
     private View brandTitleStack, pageHeading, pageTypes, pageToolbar, pageHint;
     private TextView searchIcon;
     private boolean headerScrolled = false;
+    private boolean headerPreviewDimmed = false;
     private Map<Long, Integer> playlistMembershipCounts = new HashMap<>();
     private Track pendingDelete;
     private ImageView miniCover, fullCover;
@@ -339,7 +340,7 @@ public final class MainActivity extends Activity {
 
     private void buildInterface() {
         root = new FrameLayout(this);
-        root.setBackgroundColor(Ui.BG);
+        ThemeGradient.apply(this, root);
         setContentView(root);
         ThemeBackground.attach(this, root);
         LinearLayout shell = Ui.vertical(this);
@@ -724,9 +725,22 @@ public final class MainActivity extends Activity {
         if (themeEditor != null) themeEditor.dismiss();
         themeEditor = new ThemeEditorDialog(this, new ThemeEditorDialog.Actions() {
             @Override public void onColor(String key, int color) {
-                if (!"theme_accent".equals(key) && !"theme_background".equals(key) && !"theme_text".equals(key)) return;
+                if (!"theme_accent".equals(key) && !"theme_background".equals(key)
+                        && !"theme_text".equals(key) && !"theme_gradient_start".equals(key)
+                        && !"theme_gradient_end".equals(key)) return;
+                SharedPreferences.Editor editor = getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
+                        .putInt(key, color);
+                if (key.startsWith("theme_gradient_")) editor.putBoolean("theme_gradient_enabled", true);
+                editor.apply();
+                applyThemeLive();
+            }
+            @Override public void onGradient(int start, int end, int angle, int strength, boolean enabled) {
                 getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
-                        .putInt(key, color).apply();
+                        .putInt("theme_gradient_start", start)
+                        .putInt("theme_gradient_end", end)
+                        .putInt("theme_gradient_angle", angle)
+                        .putInt("theme_gradient_strength", strength)
+                        .putBoolean("theme_gradient_enabled", enabled).apply();
                 applyThemeLive();
             }
             @Override public void onPickWallpaper() { pickWallpaper(); }
@@ -738,7 +752,10 @@ public final class MainActivity extends Activity {
             @Override public void onReset() {
                 getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
                         .remove("theme_background").remove("theme_accent")
-                        .remove("theme_text").remove("theme_wallpaper").apply();
+                        .remove("theme_text").remove("theme_wallpaper")
+                        .remove("theme_gradient_enabled").remove("theme_gradient_start")
+                        .remove("theme_gradient_end").remove("theme_gradient_angle")
+                        .remove("theme_gradient_strength").apply();
                 applyThemeLive();
             }
         });
@@ -1166,6 +1183,7 @@ public final class MainActivity extends Activity {
     private void render() {
         // Rebuilds leave selection mode; restore shared chrome before rendering a new screen.
         headerScrolled = false;
+        headerPreviewDimmed = false;
         pageHeading = null; pageTypes = null; pageToolbar = null; pageHint = null;
         setSelectionHeaderCompact(false);
         setScrolledHeader(false);
@@ -1192,12 +1210,32 @@ public final class MainActivity extends Activity {
         if (headerSubtitle != null) headerSubtitle.setVisibility(View.GONE);
     }
 
+    /** Never resize the list's viewport from onScroll: that caused first-item jitter. */
     private void setScrolledHeader(boolean compact) {
-        headerScrolled = compact;
         if (!screen.equals("Titres")) compact = false;
-        if (brandTitleStack != null) brandTitleStack.setVisibility(compact ? View.GONE : View.VISIBLE);
-        for (View v : new View[]{pageHeading, pageTypes, pageToolbar, pageHint})
-            if (v != null) v.setVisibility(compact ? View.GONE : View.VISIBLE);
+        headerScrolled = compact;
+        headerPreviewDimmed = false;
+        if (brandTitleStack != null) {
+            brandTitleStack.animate().cancel();
+            brandTitleStack.setAlpha(1f);
+            brandTitleStack.setVisibility(compact ? View.GONE : View.VISIBLE);
+        }
+        for (View v : new View[]{pageHeading, pageTypes, pageToolbar, pageHint}) {
+            if (v == null) continue;
+            v.animate().cancel();
+            v.setAlpha(1f);
+            v.setVisibility(compact ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    /** Fade secondary tools as the finger scrolls; preserve layout until scrolling stops. */
+    private void previewScrolledHeader(boolean compact) {
+        if (headerScrolled || headerPreviewDimmed == compact) return;
+        headerPreviewDimmed = compact;
+        float opacity = compact ? .32f : 1f;
+        for (View v : new View[]{brandTitleStack, pageHeading, pageTypes, pageToolbar, pageHint})
+            if (v != null && v.getVisibility() == View.VISIBLE)
+                v.animate().alpha(opacity).setDuration(150).start();
     }
 
     /** Search is self-contained: results, clearing and playback live in the same window.
@@ -1526,12 +1564,27 @@ public final class MainActivity extends Activity {
                     if (index >= 0) list.setSelectionFromTop(index, 0);
                 });
             }
+            final int[] listScrollState = {android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE};
             list.setOnScrollListener(new android.widget.AbsListView.OnScrollListener() {
-                @Override public void onScrollStateChanged(android.widget.AbsListView view, int state) {}
+                @Override public void onScrollStateChanged(android.widget.AbsListView view, int state) {
+                    listScrollState[0] = state;
+                    if (state != SCROLL_STATE_IDLE || activeTrackList != list) return;
+                    // Debounced: one height change after release/fling, never under the finger.
+                    list.postDelayed(() -> {
+                        if (activeTrackList != list || !screen.equals("Titres")
+                                || listScrollState[0] != SCROLL_STATE_IDLE) return;
+                        int first = list.getFirstVisiblePosition();
+                        int top = list.getChildCount() == 0 ? 0 : list.getChildAt(0).getTop();
+                        boolean shouldCompact = HeaderScrollRules.shouldCompact(
+                                headerScrolled, first, top, d(4), d(36));
+                        if (shouldCompact != headerScrolled) setScrolledHeader(shouldCompact);
+                        else if (!headerScrolled) previewScrolledHeader(false);
+                    }, 75);
+                }
                 @Override public void onScroll(android.widget.AbsListView view, int first, int visible, int total) {
                     if (view == null || !hasScanned) return;
-                    boolean awayFromTop = first > 0 || (view.getChildCount() > 0 && view.getChildAt(0).getTop() < -d(18));
-                    if (awayFromTop != headerScrolled) setScrolledHeader(awayFromTop);
+                    // Hysteresis avoids flickering around the first row.
+                    if (!headerScrolled) previewScrolledHeader(first > 1);
                     if (az != null && first >= 0 && first < tracks.size()) az.highlight(AlphabetRules.group(tracks.get(first).title));
                 }
             });
