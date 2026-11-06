@@ -70,6 +70,8 @@ public final class ThemeEditorDialog {
     private TextView[] modeButtons = new TextView[3];
     private int selectedRole = 0;
     private int selectedStop = 0;
+    private DualColorPickerView dualPicker;
+    private TextView gradientStopOne, gradientStopTwo, gradientSample;
     private float dragY;
 
     public ThemeEditorDialog(Activity activity, Actions actions) {
@@ -247,10 +249,8 @@ public final class ThemeEditorDialog {
         updatePreview();
         controls.removeAllViews();
         if("image".equals(mode())) drawImageControls();
-        else {
-            if("gradient".equals(mode())) drawGradientControls();
-            drawColorControls();
-        }
+        else if("gradient".equals(mode())) drawGradientControls();
+        else drawColorControls();
     }
     private void setButton(TextView view,boolean selected) {
         view.setTextColor(selected ? 0xFF101820 : Ui.TEXT);
@@ -314,83 +314,155 @@ public final class ThemeEditorDialog {
     private int[] presetEnd() {
         return selectedRole==0?ACCENT_STARTS[1]:selectedRole==2?TEXT_STARTS[1]:ThemeGradient.ENDS;
     }
+    /**
+     * A single picker keeps both gradient stops on screen. Never remove this
+     * view or rebuild the activity from an ACTION_MOVE/ACTION_UP callback.
+     * Only the durable save after finger release refreshes the player.
+     */
     private void drawGradientControls() {
-        controls.addView(text("AMBIANCES PRÊTES À UTILISER",11,Ui.MUTED,true));
+        final String editedRole = role();
+        controls.addView(text("DÉGRADÉS PRÊTS À UTILISER",11,Ui.MUTED,true));
         controls.addView(Ui.gap(activity,8));
-        GridLayout presets=new GridLayout(activity);
+        GridLayout presets = new GridLayout(activity);
         presets.setColumnCount(2);
-        int[] starts=presetStart(), ends=presetEnd();
-        for(int i=0;i<PRESET_NAMES.length;i++) {
-            final int idx=i;
-            TextView tile=text(PRESET_NAMES[i],13,roleContrast(ThemeGradient.blend(starts[i],ends[i],.5f)),true);
+        int[] starts = presetStart(), ends = presetEnd();
+        for (int idx=0;idx<PRESET_NAMES.length;idx++) {
+            final int selected=idx;
+            TextView tile=text(PRESET_NAMES[idx],13,roleContrast(ThemeGradient.blend(starts[idx],ends[idx],.5f)),true);
             tile.setGravity(Gravity.CENTER_VERTICAL);
             tile.setPadding(d(12),d(8),d(7),d(8));
-            tile.setBackground(Ui.gradient(starts[i],ends[i],12,activity));
-            tile.setContentDescription("Appliquer le dégradé "+PRESET_NAMES[i]+" pour "+ROLE_NAMES[selectedRole]);
-            tile.setOnClickListener(v->setGradient(starts[idx],ends[idx],315,100));
-            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();
-            lp.columnSpec=GridLayout.spec(i%2,1,1f);
-            lp.rowSpec=GridLayout.spec(i/2);
-            lp.width=0;lp.height=d(52);
+            tile.setBackground(Ui.gradient(starts[idx],ends[idx],12,activity));
+            tile.setContentDescription("Choisir le dégradé "+PRESET_NAMES[idx]);
+            tile.setOnClickListener(v->setGradient(starts[selected],ends[selected],315,100));
+            GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
+            lp.columnSpec=GridLayout.spec(idx%2,1,1f);
+            lp.rowSpec=GridLayout.spec(idx/2);
+            lp.width=0;
+            lp.height=d(52);
             lp.setMargins(d(3),d(3),d(3),d(3));
             presets.addView(tile,lp);
         }
         controls.addView(presets,Ui.lp(activity,-1,-2));
-        controls.addView(Ui.gap(activity,13));
+        controls.addView(Ui.gap(activity,15));
         controls.addView(text("MES DEUX COULEURS",11,Ui.MUTED,true));
-        controls.addView(Ui.gap(activity,8));
-        LinearLayout stops=Ui.horizontal(activity);
-        TextView a=button("1 · Départ",selectedStop==0);
-        TextView b=button("2 · Arrivée",selectedStop==1);
-        a.setBackground(ThemeStyle.surface(activity,role(),10));
-        b.setBackground(Ui.shape(ThemeStyle.end(activity,role()),10,activity));
-        a.setBackground(Ui.shape(ThemeStyle.start(activity,role()),10,activity));
-        a.setTextColor(roleContrast(ThemeStyle.start(activity,role())));
-        b.setTextColor(roleContrast(ThemeStyle.end(activity,role())));
-        if(selectedStop==0)a.setText("✓  1 · Départ");
-        else b.setText("✓  2 · Arrivée");
-        a.setOnClickListener(v->{selectedStop=0;refresh();});
-        b.setOnClickListener(v->{selectedStop=1;refresh();});
-        LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(0,d(48),1f);
-        sp.rightMargin=d(8);
-        stops.addView(a,sp);
-        stops.addView(b,new LinearLayout.LayoutParams(0,d(48),1f));
-        controls.addView(stops);
+        controls.addView(Ui.gap(activity,6));
+        controls.addView(text("Les repères 1 et 2 se déplacent dans le même carré et sur la barre des teintes. Touchez un repère pour le sélectionner.",12,Ui.MUTED,false));
         controls.addView(Ui.gap(activity,10));
 
-        TextView direction=text("Direction · "+ThemeStyle.angle(activity,role())+"°",12,Ui.TEXT,true);
+        gradientSample = text("",13,Ui.TEXT,true);
+        gradientSample.setContentDescription("Aperçu des deux couleurs du dégradé");
+        gradientSample.setBackground(Ui.gradient(
+                ThemeStyle.start(activity, editedRole),ThemeStyle.end(activity, editedRole),14,activity));
+        controls.addView(gradientSample,Ui.lp(activity,-1,27));
+        controls.addView(Ui.gap(activity,10));
+
+        LinearLayout stopRow=Ui.horizontal(activity);
+        gradientStopOne=text("1 · Première couleur",12,Color.WHITE,true);
+        gradientStopTwo=text("2 · Seconde couleur",12,Color.WHITE,true);
+        gradientStopOne.setGravity(Gravity.CENTER);
+        gradientStopTwo.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams first=new LinearLayout.LayoutParams(0,d(46),1f);
+        first.rightMargin=d(8);
+        stopRow.addView(gradientStopOne,first);
+        stopRow.addView(gradientStopTwo,new LinearLayout.LayoutParams(0,d(46),1f));
+        controls.addView(stopRow);
+        controls.addView(Ui.gap(activity,8));
+
+        DualColorPickerView picker=new DualColorPickerView(activity);
+        dualPicker=picker;
+        picker.setColors(ThemeStyle.start(activity,editedRole),ThemeStyle.end(activity,editedRole));
+        picker.setActiveStop(selectedStop);
+        gradientStopOne.setOnClickListener(v->{
+            selectedStop=0;
+            picker.setActiveStop(0);
+            updateGradientStops(picker.getColor(0),picker.getColor(1));
+        });
+        gradientStopTwo.setOnClickListener(v->{
+            selectedStop=1;
+            picker.setActiveStop(1);
+            updateGradientStops(picker.getColor(0),picker.getColor(1));
+        });
+        picker.setListener((firstColor,secondColor,active,finished)->{
+            if (dualPicker!=picker || dialog==null || !dialog.isShowing()) return;
+            selectedStop=active;
+            // Pure visual feedback, no preference save or tree reconstruction during drag.
+            updateGradientStops(firstColor,secondColor);
+            if (!finished) return;
+            // DualColorPickerView posts the final callback after touch dispatch.
+            prefs.edit().putInt("theme_"+editedRole+"_start",firstColor)
+                    .putInt("theme_"+editedRole+"_end",secondColor).apply();
+            actions.onChanged();
+            if(dialog!=null && dialog.isShowing()) updatePreview();
+        });
+        controls.addView(picker,Ui.lp(activity,-1,265));
+        updateGradientStops(picker.getColor(0),picker.getColor(1));
+
+        controls.addView(Ui.gap(activity,8));
+        TextView direction=text("Direction · "+ThemeStyle.angle(activity,editedRole)+"°",12,Ui.TEXT,true);
         controls.addView(direction);
         SeekBar angle=new SeekBar(activity);
         angle.setMax(7);
-        angle.setProgress(ThemeStyle.angle(activity,role())/45);
+        angle.setProgress(ThemeStyle.angle(activity,editedRole)/45);
         angle.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
                 if(fromUser)direction.setText("Direction · "+(progress*45)+"°");
             }
             public void onStartTrackingTouch(SeekBar bar){}
             public void onStopTrackingTouch(SeekBar bar){
-                prefs.edit().putInt("theme_"+role()+"_angle",bar.getProgress()*45).apply();
-                actions.onChanged();updatePreview();
+                final int finalAngle=bar.getProgress()*45;
+                bar.post(()->{
+                    if (dialog==null || !dialog.isShowing()) return;
+                    prefs.edit().putInt("theme_"+editedRole+"_angle",finalAngle).apply();
+                    actions.onChanged();
+                    updatePreview();
+                });
             }
         });
-        controls.addView(angle,Ui.lp(activity,-1,d(40)));
-        TextView intensity=text("Intensité · "+ThemeStyle.strength(activity,role())+" %",12,Ui.TEXT,true);
+        controls.addView(angle,Ui.lp(activity,-1,d(42)));
+
+        TextView intensity=text("Intensité · "+ThemeStyle.strength(activity,editedRole)+" %",12,Ui.TEXT,true);
         controls.addView(intensity);
         SeekBar strength=new SeekBar(activity);
         strength.setMax(100);
-        strength.setProgress(ThemeStyle.strength(activity,role()));
+        strength.setProgress(ThemeStyle.strength(activity,editedRole));
         strength.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
                 if(fromUser)intensity.setText("Intensité · "+progress+" %");
             }
             public void onStartTrackingTouch(SeekBar bar){}
             public void onStopTrackingTouch(SeekBar bar){
-                prefs.edit().putInt("theme_"+role()+"_strength",bar.getProgress()).apply();
-                actions.onChanged();updatePreview();
+                final int finalStrength=bar.getProgress();
+                bar.post(()->{
+                    if (dialog==null || !dialog.isShowing()) return;
+                    prefs.edit().putInt("theme_"+editedRole+"_strength",finalStrength).apply();
+                    actions.onChanged();
+                    updatePreview();
+                });
             }
         });
-        controls.addView(strength,Ui.lp(activity,-1,d(40)));
-        controls.addView(Ui.gap(activity,8));
+        controls.addView(strength,Ui.lp(activity,-1,d(42)));
+        controls.addView(text("Astuce : déplace les couleurs directement sur la palette. L'application enregistre le résultat quand tu relâches le doigt.",11,Ui.MUTED,false));
+    }
+
+    private void updateGradientStops(int first, int second) {
+        if (gradientSample==null || gradientStopOne==null || gradientStopTwo==null) return;
+        gradientSample.setBackground(Ui.gradient(first,second,13,activity));
+        gradientStopOne.setText((selectedStop==0 ? "✓  " : "")+"1 · Couleur");
+        gradientStopTwo.setText((selectedStop==1 ? "✓  " : "")+"2 · Couleur");
+        gradientStopOne.setTextColor(roleContrast(first));
+        gradientStopTwo.setTextColor(roleContrast(second));
+        // Construct these simple solid swatches directly, bypassing theme-aware
+        // Ui.shape, so ACTION_MOVE cannot trigger an expensive themed shader.
+        GradientDrawable firstBg=new GradientDrawable();
+        firstBg.setColor(first);
+        firstBg.setCornerRadius(d(11));
+        GradientDrawable secondBg=new GradientDrawable();
+        secondBg.setColor(second);
+        secondBg.setCornerRadius(d(11));
+        firstBg.setStroke(d(selectedStop==0 ? 2:1), selectedStop==0 ? Color.WHITE : 0xFF647080);
+        secondBg.setStroke(d(selectedStop==1 ? 2:1), selectedStop==1 ? Color.WHITE : 0xFF647080);
+        gradientStopOne.setBackground(firstBg);
+        gradientStopTwo.setBackground(secondBg);
     }
 
     private void drawColorControls() {
@@ -407,8 +479,13 @@ public final class ThemeEditorDialog {
         controls.addView(Ui.gap(activity,5));
         TextView sample=text("",14,Ui.TEXT,true);
         picker.setListener((chosen,finished)->{
-            sample.setBackground(Ui.shape(chosen,10,activity));
-            if(finished) saveColor(chosen);
+            // Only the sample changes while dragging; saving/rebuilding is
+            // deferred until after Android has finished delivering ACTION_UP.
+            GradientDrawable swatch = new GradientDrawable();
+            swatch.setColor(chosen);
+            swatch.setCornerRadius(d(10));
+            sample.setBackground(swatch);
+            if(finished) picker.post(() -> saveColor(chosen));
         });
         controls.addView(picker,Ui.lp(activity,-1,240));
         controls.addView(Ui.gap(activity,7));
