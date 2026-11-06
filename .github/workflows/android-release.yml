@@ -34,12 +34,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.2.1'
       - name: Installer le SDK Android
-        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+        run: |
+          sdkmanager --install 'platforms;android-34' 'build-tools;34.0.0'
       - name: Préparer la clé et vérifier la version
         env:
           KEYSTORE_B64: ${{ secrets.ONDE_KEYSTORE_BASE64 }}
