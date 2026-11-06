@@ -626,10 +626,10 @@ public final class MainActivity extends Activity {
         actions.add(new OptionSheet.Item("⏱", "Minuteur de sommeil", "Arrêter la musique après un délai", this::showSleepDialog));
         actions.add(new OptionSheet.Item("≋", "Égaliseur personnalisé", "Bandes réglables, préréglages, profils sauvegardés", this::showEqualizerDialog));
         actions.add(new OptionSheet.Item("✎", "Personnaliser l'apparence", "Accent, fond, couleur du texte et image personnelle", this::showThemeMenu));
-        actions.add(new OptionSheet.Item("↻", "Mises à jour", "Vérifier ou configurer les nouvelles versions", this::showUpdateSettings));
+        actions.add(new OptionSheet.Item("↻", "Mises à jour", "Version installée, état et recherche des nouvelles versions", this::showUpdateSettings));
         actions.add(new OptionSheet.Item("ⓘ", "Revoir le guide", "Gestes de lecture, sélection et file d'attente", this::startGuide));
-        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.6.0 · Média local et privé", () ->
-                new AlertDialog.Builder(this).setTitle("Onde Player 3.6.0")
+        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.7.1 · Média local et privé", () ->
+                new AlertDialog.Builder(this).setTitle("Onde Player 3.7.1")
                         .setMessage("Lecteur musical hors ligne. Aucun compte ni publicité.\n\nLes statistiques et les playlists restent sur cet appareil. Le temps d'écoute est mesuré à partir de la V3.")
                         .setPositiveButton("Fermer", null).show()));
         OptionSheet.show(this, "Votre bibliothèque", "Réglages et raccourcis", actions);
@@ -639,49 +639,14 @@ public final class MainActivity extends Activity {
      * A release is only suggested, never downloaded or installed without an explicit tap. */
     private static final String DEFAULT_UPDATE_FEED = "https://raw.githubusercontent.com/angemort/onde-player/main/update.json";
 
+    /** Un écran de vérification lisible, sans configuration technique exposée. */
     private void showUpdateSettings() {
-        SharedPreferences prefs = getSharedPreferences("onde_settings", MODE_PRIVATE);
-        EditText address = new EditText(this);
-        address.setSingleLine(false);
-        address.setMinLines(2);
-        address.setText(prefs.getString("updates_manifest_url", DEFAULT_UPDATE_FEED));
-        address.setHint("https://raw.githubusercontent.com/.../update.json");
-        address.setTextSize(13);
-        LinearLayout box = Ui.vertical(this);
-        box.setPadding(d(22), d(8), d(22), d(5));
-        box.addView(Ui.text(this, "Le lien GitHub est préconfiguré. Les vérifications se feront automatiquement au démarrage, au maximum une fois par jour.", 13, Ui.MUTED, false));
-        box.addView(Ui.gap(this, 12));
-        box.addView(address, Ui.lp(this, -1, -2));
-        box.addView(Ui.gap(this, 8));
-        box.addView(Ui.text(this, "Laisser vide pour désactiver les vérifications. Lecture hors ligne inchangée.", 11, Ui.MUTED, false));
-        new AlertDialog.Builder(this)
-                .setTitle("Mises à jour d’Onde Player")
-                .setView(box)
-                .setNeutralButton("Désactiver", (dialog, which) -> {
-                    prefs.edit().putString("updates_manifest_url", "").apply();
-                    toast("Recherche de mises à jour désactivée");
-                })
-                .setNegativeButton("Enregistrer", (dialog, which) -> saveUpdateUrl(address.getText().toString(), false))
-                .setPositiveButton("Enregistrer et vérifier", (dialog, which) -> saveUpdateUrl(address.getText().toString(), true))
-                .show();
-    }
-
-    private void saveUpdateUrl(String candidate, boolean check) {
-        String url = candidate.trim();
-        if (!url.isEmpty() && !UpdateChecker.https(url)) {
-            toast("Utilise une adresse HTTPS valide");
-            return;
-        }
-        getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
-                .putString("updates_manifest_url", url).remove("updates_last_check_ms").apply();
-        if (url.isEmpty()) toast("Vérification automatique désactivée");
-        else if (check) checkForUpdates(true);
-        else toast("Vérification automatique activée");
+        UpdatePanel.show(this, io, DEFAULT_UPDATE_FEED);
     }
 
     private void checkForUpdates(boolean manual) {
         SharedPreferences prefs = getSharedPreferences("onde_settings", MODE_PRIVATE);
-        String url = prefs.getString("updates_manifest_url", DEFAULT_UPDATE_FEED).trim();
+        String url = DEFAULT_UPDATE_FEED;
         if (!UpdateChecker.https(url)) {
             if (manual) toast("Configure d'abord le lien de mise à jour");
             return;
