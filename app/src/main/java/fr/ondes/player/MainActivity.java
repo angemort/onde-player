@@ -109,6 +109,7 @@ public final class MainActivity extends Activity {
 
     private FrameLayout root;
     private ThemeEditorDialog themeEditor;
+    private String pendingThemeImageTarget = "background";
     private FrameLayout content;
     private LinearLayout topTabs;
     private View tabHeader;
@@ -202,6 +203,7 @@ public final class MainActivity extends Activity {
         if (savedInstanceState != null) {
             exportPlaylistId = savedInstanceState.getLong("onde_export_playlist_id", 0L);
             exportPlaylistName = savedInstanceState.getString("onde_export_playlist_name");
+            pendingThemeImageTarget = savedInstanceState.getString("onde_image_target", "background");
         }
         Ui.configure(this);
         getWindow().setStatusBarColor(Ui.BG);
@@ -220,6 +222,7 @@ public final class MainActivity extends Activity {
     @Override protected void onSaveInstanceState(Bundle outState) {
         outState.putLong("onde_export_playlist_id", exportPlaylistId);
         outState.putString("onde_export_playlist_name", exportPlaylistName);
+        outState.putString("onde_image_target", pendingThemeImageTarget);
         super.onSaveInstanceState(outState);
     }
 
@@ -687,42 +690,23 @@ public final class MainActivity extends Activity {
         });
     }
 
-    /** Theme preview changes are applied without recreating the Activity or closing the editor. */
+    /** Theme changes rebuild the player while the simple three-part editor stays open. */
     private void showThemeMenu() {
         if (themeEditor != null) themeEditor.dismiss();
         themeEditor = new ThemeEditorDialog(this, new ThemeEditorDialog.Actions() {
-            @Override public void onColor(String key, int color) {
-                if (!"theme_accent".equals(key) && !"theme_background".equals(key)
-                        && !"theme_text".equals(key) && !"theme_gradient_start".equals(key)
-                        && !"theme_gradient_end".equals(key)) return;
-                SharedPreferences.Editor editor = getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
-                        .putInt(key, color);
-                if (key.startsWith("theme_gradient_")) editor.putBoolean("theme_gradient_enabled", true);
-                editor.apply();
-                applyThemeLive();
-            }
-            @Override public void onGradient(int start, int end, int angle, int strength, boolean enabled) {
-                getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
-                        .putInt("theme_gradient_start", start)
-                        .putInt("theme_gradient_end", end)
-                        .putInt("theme_gradient_angle", angle)
-                        .putInt("theme_gradient_strength", strength)
-                        .putBoolean("theme_gradient_enabled", enabled).apply();
-                applyThemeLive();
-            }
-            @Override public void onPickWallpaper() { pickWallpaper(); }
-            @Override public void onClearWallpaper() {
-                getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
-                        .remove("theme_wallpaper").apply();
-                applyThemeLive();
-            }
+            @Override public void onChanged() { applyThemeLive(); }
+            @Override public void onChooseImage(String role) { pickThemeImage(role); }
             @Override public void onReset() {
-                getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
-                        .remove("theme_background").remove("theme_accent")
-                        .remove("theme_text").remove("theme_wallpaper")
-                        .remove("theme_gradient_enabled").remove("theme_gradient_start")
-                        .remove("theme_gradient_end").remove("theme_gradient_angle")
-                        .remove("theme_gradient_strength").apply();
+                SharedPreferences.Editor e = getSharedPreferences("onde_settings", MODE_PRIVATE).edit();
+                for (String target : new String[]{"accent", "background", "text"}) {
+                    e.remove("theme_" + target).remove("theme_" + target + "_mode")
+                            .remove("theme_" + target + "_start").remove("theme_" + target + "_end")
+                            .remove("theme_" + target + "_angle").remove("theme_" + target + "_strength")
+                            .remove("theme_" + target + "_image");
+                }
+                e.remove("theme_wallpaper").remove("theme_gradient_enabled")
+                        .remove("theme_gradient_start").remove("theme_gradient_end")
+                        .remove("theme_gradient_angle").remove("theme_gradient_strength").apply();
                 applyThemeLive();
             }
         });
@@ -751,7 +735,9 @@ public final class MainActivity extends Activity {
         updateSleepBubble();
     }
 
-    private void pickWallpaper() {
+    private void pickThemeImage(String role) {
+        if (!"accent".equals(role) && !"background".equals(role) && !"text".equals(role)) return;
+        pendingThemeImageTarget = role;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
@@ -2302,7 +2288,8 @@ public final class MainActivity extends Activity {
                 try {
                     getContentResolver().takePersistableUriPermission(picture, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     getSharedPreferences("onde_settings", MODE_PRIVATE).edit()
-                            .putString("theme_wallpaper", picture.toString()).apply();
+                            .putString("theme_" + pendingThemeImageTarget + "_image", picture.toString())
+                            .putString("theme_" + pendingThemeImageTarget + "_mode", "image").apply();
                     applyThemeLive();
                     if (themeEditor != null) themeEditor.refreshState();
                 } catch (Exception e) { toast("Impossible de conserver cette image. Choisis une autre photo."); }

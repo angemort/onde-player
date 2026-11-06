@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
@@ -17,574 +18,464 @@ import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import java.util.Locale;
 
-/** A persistent, self-contained theme editor: choosing a swatch never dismisses the sheet. */
+/**
+ * Three roles, three appearance modes. A color-picker always edits either the
+ * solid color or a selected gradient stop; changes preview live and commit on
+ * finger release. The dialog stays open when the player is rebuilt.
+ */
 public final class ThemeEditorDialog {
     public interface Actions {
-        void onColor(String preferenceKey, int color);
-        void onGradient(int start, int end, int angle, int intensity, boolean enabled);
-        void onPickWallpaper();
-        void onClearWallpaper();
+        void onChanged();
+        void onChooseImage(String role);
         void onReset();
     }
-
-    private static final int[] ACCENTS = {
-            0xFFA8F36A, 0xFF9B82F5, 0xFFFF806A, 0xFF69BFFF,
-            0xFFFF88BC, 0xFFFFCE73, 0xFF5FE3CD
+    private static final String[] ROLES = {"accent", "background", "text"};
+    private static final String[] ROLE_NAMES = {"Accent", "Fond", "Texte"};
+    private static final String[] MODES = {"solid", "gradient", "image"};
+    private static final String[] MODE_NAMES = {"Uni", "Dégradé", "Image"};
+    private static final int[][] SOLIDS = {
+        {0xFFA8F36A,0xFF9B82F5,0xFFFF806A,0xFF69BFFF,0xFFFF88BC,0xFFFFCE73,0xFF5FE3CD,0xFFFFFFFF},
+        {0xFF0B0C12,0xFF101B30,0xFF1F1533,0xFF2B151E,0xFF10231E,0xFF232831,0xFF191B28,0xFF0A2729},
+        {0xFFF5F8FB,0xFFFFFFFF,0xFFE9E0FF,0xFFFFE9C5,0xFFD5F8D6,0xFFB3E6FF,0xFFFFCDD8,0xFF101820}
     };
-    private static final String[] ACCENT_NAMES = {
-            "Vert Onde", "Violet", "Corail", "Bleu", "Rose", "Or", "Turquoise"
+    private static final String[] PRESET_NAMES = {
+            "Néon", "Océan", "Aurore", "Braise", "Forêt", "Prune"
     };
-    private static final int[] BACKGROUNDS = {
-            0xFF0B0C12, 0xFF101B30, 0xFF1F1533,
-            0xFF2B151E, 0xFF10231E, 0xFF232831
+    private static final int[][] ACCENT_STARTS = {
+        {0xFFA8F36A,0xFF49CEFF,0xFFFFB2D9,0xFFFFBE59,0xFF63F3A5,0xFFCF8CFF},
+        {0xFF5175FF,0xFF66FFD4,0xFFE98AFF,0xFFFF5D6B,0xFF80ADFF,0xFFFF82B7}
     };
-    private static final String[] BACKGROUND_NAMES = {
-            "Noir Onde", "Bleu nuit", "Violet", "Bordeaux", "Forêt", "Ardoise"
-    };
-    private static final int[] TEXT_COLORS = {
-            0xFFF5F8FB, 0xFFFFFFFF, 0xFFE9E0FF, 0xFFFFE9C5,
-            0xFFD5F8D6, 0xFFB3E6FF, 0xFFFFCDD8, 0xFF101820
-    };
-    private static final String[] TEXT_COLOR_NAMES = {
-            "Blanc Onde", "Blanc", "Lavande", "Crème",
-            "Menthe", "Ciel", "Rosé", "Anthracite"
+    private static final int[][] TEXT_STARTS = {
+        {0xFFFFFFFF,0xFFCAFAFF,0xFFFFE0EF,0xFFFFF1C1,0xFFD5FFE7,0xFFEBD8FF},
+        {0xFFA8F36A,0xFF8BC7FF,0xFFECB0FF,0xFFFFBC97,0xFF80E4D2,0xFFB4CAFF}
     };
 
     private final Activity activity;
     private final Actions actions;
     private final SharedPreferences prefs;
     private Dialog dialog;
-    // 0: accent, 1: background, 2: main text, 3: two-color gradient.
-    private int colorTab = 0;
-    private int gradientSlot = 0;
-    private GridLayout swatches;
+    private LinearLayout container, content, controls;
+    private ScrollView scroll;
     private FrameLayout preview;
-    private TextView previewTitle, previewCaption, previewChip;
-    private TextView accentButton, backgroundButton, textColorButton, gradientButton, imageButton;
-    private LinearLayout gradientPanel;
-    private TextView gradientStartButton, gradientEndButton, angleDescription, intensityDescription;
-    private SeekBar angleSeek, intensitySeek;
-    private EditText hexField;
-    private TextView selectedLabel;
-    private ColorPickerView colorPicker;
-    private TextView sampleCircle;
-    private TextView pickerHint;
-    private LinearLayout hexRow;
-    private TextView advancedHexButton;
-    private boolean hexAdvancedOpen;
-    private LinearLayout body;
-    private ScrollView scrollView;
-    private float downY;
-    private boolean collapsed;
-    private TextView applyHexButton;
+    private ImageView previewImage;
+    private TextView previewTitle, previewAccent, previewText;
+    private TextView[] targetButtons = new TextView[3];
+    private TextView[] modeButtons = new TextView[3];
+    private int selectedRole = 0;
+    private int selectedStop = 0;
+    private float dragY;
 
     public ThemeEditorDialog(Activity activity, Actions actions) {
         this.activity = activity;
         this.actions = actions;
-        this.prefs = activity.getSharedPreferences("onde_settings", Context.MODE_PRIVATE);
+        prefs = ThemeStyle.prefs(activity);
     }
-
-    private int d(float dp) { return Ui.dp(activity, dp); }
-    private String colorKey(int tab) {
-        return tab == 0 ? "theme_accent" : tab == 1 ? "theme_background" : tab == 2 ? "theme_text"
-                : gradientSlot == 0 ? "theme_gradient_start" : "theme_gradient_end";
+    private String role() { return ROLES[selectedRole]; }
+    private String mode() { return ThemeStyle.mode(activity, role()); }
+    private int d(float n) { return Ui.dp(activity, n); }
+    private TextView text(String s, int sp, int color, boolean bold) {
+        return Ui.text(activity, s, sp, color, bold);
     }
-    private int currentColor(int tab) {
-        return prefs.getInt(colorKey(tab),
-                tab == 0 ? ACCENTS[0] : tab == 1 ? BACKGROUNDS[0] : tab == 2 ? 0xFFF5F8FB
-                        : gradientSlot == 0 ? ThemeGradient.STARTS[0] : ThemeGradient.ENDS[0]);
+    private TextView button(String name, boolean selected) {
+        TextView v = text(name, 13, selected ? 0xFF101820 : Ui.TEXT, true);
+        v.setGravity(Gravity.CENTER);
+        v.setMinHeight(d(45));
+        Ui.clickable(v, Ui.shape(selected ? Ui.ACCENT : Ui.SURFACE_ALT, 13, activity));
+        return v;
     }
-    private String hex(int color) { return String.format(Locale.ROOT, "#%06X", color & 0xFFFFFF); }
-    private TextView text(String value, int size, int color, boolean bold) {
-        return Ui.text(activity, value, size, color, bold);
+    private static int roleContrast(int value) {
+        return ((Color.red(value)*299+Color.green(value)*587+Color.blue(value)*114)/1000) > 145
+                ? 0xFF101820 : Color.WHITE;
     }
-    private LinearLayout.LayoutParams layout(int width, int height) { return Ui.lp(activity, width, height); }
 
     public void show() {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         dialog = new Dialog(activity);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        LinearLayout panel = Ui.vertical(activity);
-        panel.setPadding(d(18), d(8), d(18), d(15));
-        panel.setBackground(Ui.gradient(0xFF262D3A, 0xFF151922, 26, activity));
+        container = Ui.vertical(activity);
+        container.setPadding(d(17), d(7), d(17), d(18));
+        container.setBackground(Ui.gradient(0xFF262D3A, 0xFF141820, 26, activity));
 
-        TextView handle = text("━━", 20, 0xFF81909C, true);
+        TextView handle = text("━━", 20, Ui.MUTED, true);
         handle.setGravity(Gravity.CENTER);
-        handle.setContentDescription("Faire glisser vers le bas pour fermer le thème");
-        handle.setPadding(0, d(1), 0, d(12));
-        panel.addView(handle, layout(-1, 34));
+        handle.setContentDescription("Glisser vers le bas pour fermer");
+        container.addView(handle, Ui.lp(activity, -1, 31));
         handle.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN: downY = event.getRawY(); return true;
-                case MotionEvent.ACTION_MOVE:
-                    panel.setTranslationY(Math.max(0f, event.getRawY() - downY) * .55f);
-                    return true;
-                case MotionEvent.ACTION_UP:
-                    float delta = event.getRawY() - downY;
-                    if (delta > d(170) || (collapsed && delta > d(65))) dismiss();
-                    else if (delta > d(50)) setCollapsed(true);
-                    else if (delta < -d(45)) setCollapsed(false);
-                    else if (Math.abs(delta) < d(12)) setCollapsed(!collapsed);
-                    panel.animate().translationY(0).setDuration(160).start();
-                    return true;
-                case MotionEvent.ACTION_CANCEL:
-                    panel.animate().translationY(0).setDuration(160).start();
-                    return true;
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                dragY = event.getRawY();
+                return true;
             }
-            return false;
+            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                if (event.getRawY() - dragY > d(75)) dismiss();
+                return true;
+            }
+            return true;
         });
 
         LinearLayout top = Ui.horizontal(activity);
         LinearLayout headings = Ui.vertical(activity);
-        headings.addView(text("Personnaliser le thème", 21, Ui.TEXT, true));
-        TextView subtitle = text("Les changements s'appliquent sans fermer ce volet", 11, Ui.MUTED, false);
-        subtitle.setPadding(0, d(4), 0, 0);
-        headings.addView(subtitle);
-        top.addView(headings, new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView close = text("Terminer", 13, Ui.TEXT, true);
-        close.setGravity(Gravity.CENTER);
-        close.setPadding(d(13), d(11), d(13), d(11));
-        Ui.clickable(close, Ui.shape(0xFF38434D, 16, activity));
-        close.setContentDescription("Fermer la personnalisation du thème");
+        headings.addView(text("Mon univers", 22, Ui.TEXT, true));
+        TextView summary = text("Choisissez l'apparence de chaque élément", 11, Ui.MUTED, false);
+        summary.setPadding(0,d(4),0,0);
+        headings.addView(summary);
+        top.addView(headings, new LinearLayout.LayoutParams(0,-2,1f));
+        TextView close = button("Terminer", false);
         close.setOnClickListener(v -> dismiss());
-        LinearLayout.LayoutParams closeParams = layout(-2, -2);
-        closeParams.leftMargin = d(12);
-        top.addView(close, closeParams);
-        panel.addView(top);
-        panel.addView(Ui.gap(activity, 14));
+        LinearLayout.LayoutParams closeParams = Ui.lp(activity, -2, 43);
+        closeParams.leftMargin = d(8);
+        top.addView(close,closeParams);
+        container.addView(top);
+        container.addView(Ui.gap(activity,13));
 
-        ScrollView scroll = new ScrollView(activity);
-        scrollView = scroll;
+        scroll = new ScrollView(activity);
         scroll.setVerticalScrollBarEnabled(false);
-        body = Ui.vertical(activity);
-        scroll.addView(body);
-        panel.addView(scroll, new LinearLayout.LayoutParams(-1, Math.min(d(640),
-                (int)(activity.getResources().getDisplayMetrics().heightPixels * .72f))));
+        content = Ui.vertical(activity);
+        scroll.addView(content);
+        container.addView(scroll, new LinearLayout.LayoutParams(-1,
+                Math.min(d(660),(int)(activity.getResources().getDisplayMetrics().heightPixels * .72f))));
 
         preview = new FrameLayout(activity);
-        LinearLayout previewInner = Ui.vertical(activity);
-        previewInner.setPadding(d(17), d(16), d(17), d(16));
-        previewTitle = text("onde.", 29, Ui.TEXT, true);
-        previewInner.addView(previewTitle);
-        previewInner.addView(Ui.gap(activity, 13));
-        LinearLayout previewRow = Ui.horizontal(activity);
-        previewChip = text("♫", 22, 0xFF111111, true);
-        previewChip.setGravity(Gravity.CENTER);
-        previewChip.setBackground(Ui.shape(Ui.ACCENT, 13, activity));
-        previewRow.addView(previewChip, layout(46, 46));
-        previewCaption = text("Aperçu de votre bibliothèque", 13, Ui.TEXT, true);
-        previewCaption.setPadding(d(12), 0, 0, 0);
-        previewRow.addView(previewCaption);
-        previewInner.addView(previewRow);
-        preview.addView(previewInner);
-        body.addView(preview, layout(-1, -2));
-        body.addView(Ui.gap(activity, 19));
+        previewImage = new ImageView(activity);
+        previewImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        previewImage.setAlpha(.24f);
+        preview.addView(previewImage,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout previewContents = Ui.vertical(activity);
+        previewContents.setPadding(d(15),d(15),d(15),d(15));
+        previewTitle = text("onde.",27,Ui.TEXT,true);
+        previewContents.addView(previewTitle);
+        previewContents.addView(Ui.gap(activity,10));
+        LinearLayout sample = Ui.horizontal(activity);
+        previewAccent = text("♫",24,Color.BLACK,true);
+        previewAccent.setGravity(Gravity.CENTER);
+        sample.addView(previewAccent,Ui.lp(activity,44,44));
+        previewText = text("Votre bibliothèque musicale",13,Ui.TEXT,true);
+        previewText.setPadding(d(11),0,0,0);
+        sample.addView(previewText);
+        previewContents.addView(sample);
+        preview.addView(previewContents,new FrameLayout.LayoutParams(-1,-2));
+        content.addView(preview,Ui.lp(activity,-1,-2));
+        content.addView(Ui.gap(activity,15));
 
-        LinearLayout tabs = Ui.horizontal(activity);
-        accentButton = makeTab("Accent");
-        backgroundButton = makeTab("Fond");
-        textColorButton = makeTab("Texte");
-        gradientButton = makeTab("Dégradé");
-        TextView[] themeTabs = {accentButton, backgroundButton, textColorButton, gradientButton};
-        for (int i = 0; i < themeTabs.length; i++) {
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, d(48), 1f);
-            if (i > 0) p.leftMargin = d(7);
-            tabs.addView(themeTabs[i], p);
-            final int tab = i;
-            themeTabs[i].setOnClickListener(v -> selectTab(tab));
+        content.addView(text("QUE VOULEZ-VOUS PERSONNALISER ?",10,Ui.MUTED,true));
+        content.addView(Ui.gap(activity,7));
+        LinearLayout targets = Ui.horizontal(activity);
+        for(int i=0;i<3;i++) {
+            final int at=i;
+            targetButtons[i]=button(ROLE_NAMES[i],i==selectedRole);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0,d(46),1f);
+            if(i>0)p.leftMargin=d(7);
+            targets.addView(targetButtons[i],p);
+            targetButtons[i].setOnClickListener(v->{selectedRole=at; selectedStop=0;refresh();});
         }
-        body.addView(tabs);
-        body.addView(Ui.gap(activity, 14));
-        gradientPanel = buildGradientPanel();
-        body.addView(gradientPanel);
-        body.addView(Ui.gap(activity, 10));
+        content.addView(targets);
+        content.addView(Ui.gap(activity,15));
+        content.addView(text("STYLE",10,Ui.MUTED,true));
+        content.addView(Ui.gap(activity,7));
 
-        // Visual color selection comes first; no hexadecimal input is required.
-        selectedLabel = text("Personnalisez votre couleur", 13, Ui.TEXT, true);
-        body.addView(selectedLabel);
-        body.addView(Ui.gap(activity, 5));
-        pickerHint = text("Glissez dans le carré pour choisir la nuance, puis sur la barre arc-en-ciel pour changer de teinte.", 12, Ui.MUTED, false);
-        body.addView(pickerHint);
-        body.addView(Ui.gap(activity, 8));
-        colorPicker = new ColorPickerView(activity);
-        colorPicker.setListener((chosen, finished) -> {
-            updatePreview(chosen);
-            if (finished) save(colorTab, chosen);
-        });
-        body.addView(colorPicker, layout(-1, 260));
+        LinearLayout modes = Ui.horizontal(activity);
+        for(int i=0;i<3;i++) {
+            final int at=i;
+            modeButtons[i]=button(MODE_NAMES[i],MODES[i].equals(mode()));
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0,d(45),1f);
+            if(i>0)p.leftMargin=d(7);
+            modes.addView(modeButtons[i],p);
+            modeButtons[i].setOnClickListener(v -> setMode(MODES[at]));
+        }
+        content.addView(modes);
+        content.addView(Ui.gap(activity,13));
 
-        LinearLayout selectedRow = Ui.horizontal(activity);
-        selectedRow.setPadding(d(5), 0, d(4), 0);
-        sampleCircle = text("✓", 17, 0xFF142018, true);
-        sampleCircle.setGravity(Gravity.CENTER);
-        selectedRow.addView(sampleCircle, layout(38, 38));
-        TextView selectedDescription = text("Aperçu de votre couleur", 13, Ui.TEXT, true);
-        selectedDescription.setPadding(d(12), 0, 0, 0);
-        selectedRow.addView(selectedDescription);
-        body.addView(selectedRow);
-        body.addView(Ui.gap(activity, 15));
+        controls=Ui.vertical(activity);
+        content.addView(controls);
+        content.addView(Ui.gap(activity,16));
+        TextView reset = text("↻  Rétablir les couleurs d'origine",13,Ui.MUTED,true);
+        reset.setGravity(Gravity.CENTER);
+        reset.setPadding(d(10),d(14),d(10),d(14));
+        Ui.clickable(reset,Ui.shape(Ui.SURFACE,14,activity));
+        reset.setOnClickListener(v->{actions.onReset();selectedRole=0;selectedStop=0;refresh();});
+        content.addView(reset);
+        content.addView(Ui.gap(activity,15));
 
-        body.addView(text("COULEURS RAPIDES", 11, Ui.MUTED, true));
-        body.addView(Ui.gap(activity, 8));
-        swatches = new GridLayout(activity);
-        swatches.setColumnCount(4);
-        body.addView(swatches, layout(-1, -2));
-        body.addView(Ui.gap(activity, 10));
-
-        advancedHexButton = text("▸  Saisir un code couleur (avancé)", 12, Ui.MUTED, false);
-        advancedHexButton.setPadding(d(8), d(10), d(4), d(10));
-        advancedHexButton.setOnClickListener(v -> {
-            hexAdvancedOpen = !hexAdvancedOpen;
-            hexRow.setVisibility(hexAdvancedOpen ? View.VISIBLE : View.GONE);
-            advancedHexButton.setText(hexAdvancedOpen
-                    ? "▾  Masquer le code couleur" : "▸  Saisir un code couleur (avancé)");
-        });
-        body.addView(advancedHexButton);
-
-        hexRow = Ui.horizontal(activity);
-        hexRow.setVisibility(View.GONE);
-        hexField = new EditText(activity);
-        hexField.setSingleLine(true);
-        hexField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-        hexField.setTextColor(Ui.TEXT);
-        hexField.setHintTextColor(Ui.MUTED);
-        hexField.setTextSize(15);
-        hexField.setSelectAllOnFocus(true);
-        hexField.setHint("#RRGGBB");
-        hexField.setPadding(d(13), d(4), d(7), d(4));
-        hexField.setBackground(Ui.outlined(0xFF29313F, 0xFF556474, 13, activity));
-        hexRow.addView(hexField, new LinearLayout.LayoutParams(0, d(49), 1f));
-        TextView applyHex = text("Appliquer", 13, 0xFF101712, true);
-        applyHex.setGravity(Gravity.CENTER);
-        applyHex.setPadding(d(12), 0, d(12), 0);
-        applyHex.setBackground(Ui.shape(0xFFA8F36A, 12, activity));
-        LinearLayout.LayoutParams ap = layout(-2, 49);
-        ap.leftMargin = d(9);
-        hexRow.addView(applyHex, ap);
-        applyHexButton = applyHex;
-        applyHex.setOnClickListener(v -> {
-            String input = hexField.getText().toString().trim();
-            if (!input.matches("(?i)#[0-9a-f]{6}")) {
-                hexField.setError("Code couleur attendu : #A8F36A");
-                return;
-            }
-            save(colorTab, Color.parseColor(input));
-            hexField.clearFocus();
-        });
-        body.addView(hexRow);
-        body.addView(Ui.gap(activity, 17));
-
-        body.addView(Ui.line(activity));
-        body.addView(Ui.gap(activity, 14));
-        body.addView(text("IMAGE DE FOND", 11, Ui.MUTED, true));
-        body.addView(Ui.gap(activity, 9));
-        imageButton = actionRow("Choisir une photo", "Image personnelle derrière la bibliothèque", "▣");
-        imageButton.setOnClickListener(v -> actions.onPickWallpaper());
-        body.addView(imageButton);
-        TextView remove = actionRow("Retirer l'image", "Revenir à la couleur de fond", "✕");
-        remove.setOnClickListener(v -> {
-            actions.onClearWallpaper();
-            refreshState();
-        });
-        body.addView(Ui.gap(activity, 8));
-        body.addView(remove);
-        body.addView(Ui.gap(activity, 13));
-        TextView reset = actionRow("Rétablir le thème d'origine", "Rétablir les couleurs et retirer l'image", "↻");
-        reset.setOnClickListener(v -> {
-            actions.onReset();
-            refreshState();
-        });
-        body.addView(reset);
-        body.addView(Ui.gap(activity, 18));
-
-        dialog.setContentView(panel);
-        Window window = dialog.getWindow();
-        if (window != null) {
+        dialog.setContentView(container);
+        Window window=dialog.getWindow();
+        if(window!=null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            window.setDimAmount(.56f);
+            window.setDimAmount(.61f);
             window.setGravity(Gravity.BOTTOM);
-            window.setNavigationBarColor(0xFF151922);
+            window.setNavigationBarColor(0xFF141820);
         }
-        dialog.setOnDismissListener(v -> dialog = null);
         dialog.show();
-        if (window != null) window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        refreshState();
+        if(window!=null)window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+        refresh();
     }
 
-    private TextView makeTab(String title) {
-        TextView view = text(title, 13, Ui.TEXT, true);
-        view.setGravity(Gravity.CENTER);
-        return view;
+    private void setMode(String next) {
+        prefs.edit().putString("theme_"+role()+"_mode",next).apply();
+        selectedStop=0;
+        actions.onChanged();
+        refresh();
+    }
+    private void saveColor(int color) {
+        String key="theme_"+role();
+        if("gradient".equals(mode())) key += selectedStop == 0 ? "_start" : "_end";
+        prefs.edit().putInt(key,color).apply();
+        actions.onChanged();
+        refresh();
+    }
+    private void setGradient(int a, int b, int angle, int intensity) {
+        String p="theme_"+role();
+        prefs.edit().putString(p+"_mode","gradient")
+                .putInt(p+"_start",a).putInt(p+"_end",b)
+                .putInt(p+"_angle",angle).putInt(p+"_strength",intensity).apply();
+        actions.onChanged();
+        refresh();
+    }
+    public void refreshState() { refresh(); }
+    private void refresh() {
+        if(dialog==null || !dialog.isShowing() || controls==null)return;
+        for(int i=0;i<3;i++){
+            setButton(targetButtons[i],i==selectedRole);
+            setButton(modeButtons[i],MODES[i].equals(mode()));
+        }
+        updatePreview();
+        controls.removeAllViews();
+        if("image".equals(mode())) drawImageControls();
+        else {
+            if("gradient".equals(mode())) drawGradientControls();
+            drawColorControls();
+        }
+    }
+    private void setButton(TextView view,boolean selected) {
+        view.setTextColor(selected ? 0xFF101820 : Ui.TEXT);
+        view.setBackground(Ui.shape(selected ? Ui.ACCENT : Ui.SURFACE_ALT,13,activity));
     }
 
-    private TextView actionRow(String title, String description, String symbol) {
-        // The description is available to TalkBack and uses a short row to preserve height.
-        TextView view = text(symbol + "   " + title + "   ›", 14, Ui.TEXT, true);
-        view.setContentDescription(title + ". " + description);
-        view.setPadding(d(13), d(14), d(11), d(14));
-        Ui.clickable(view, Ui.shape(0xFF29313F, 14, activity));
-        return view;
+    private void updatePreview() {
+        String bgMode=ThemeStyle.mode(activity,"background");
+        if("gradient".equals(bgMode)) {
+            preview.setBackground(ThemeStyle.surface(activity,"background",18));
+            previewImage.setVisibility(View.GONE);
+        } else {
+            preview.setBackground(Ui.shape(Ui.effectiveBackground(ThemeStyle.solid(activity,"background")),18,activity));
+            Bitmap picture="image".equals(bgMode)?ThemeStyle.picture(activity,"background"):null;
+            if(picture!=null) {
+                previewImage.setImageBitmap(picture);
+                previewImage.setVisibility(View.VISIBLE);
+            } else previewImage.setVisibility(View.GONE);
+        }
+        previewTitle.setTextColor(ThemeStyle.solid(activity,"text"));
+        previewText.setTextColor(ThemeStyle.solid(activity,"text"));
+        ThemeStyle.applyText(previewTitle,"text");
+        ThemeStyle.applyText(previewText,"text");
+        previewAccent.setBackground(ThemeStyle.surface(activity,"accent",13));
+        previewAccent.setTextColor(roleContrast(ThemeStyle.solid(activity,"accent")));
     }
 
-    private LinearLayout buildGradientPanel() {
-        LinearLayout group = Ui.vertical(activity);
-        group.addView(text("AMBIANCES PRÊTES À UTILISER", 11, Ui.MUTED, true));
-        group.addView(Ui.gap(activity, 8));
-        GridLayout presets = new GridLayout(activity);
-        presets.setColumnCount(2);
-        for (int i = 0; i < ThemeGradient.NAMES.length; i++) {
-            final int at = i;
-            TextView tile = text(ThemeGradient.NAMES[i], 13, Color.WHITE, true);
-            tile.setGravity(Gravity.BOTTOM | Gravity.LEFT);
-            tile.setPadding(d(12), d(11), d(10), d(11));
-            tile.setBackground(ThemeGradient.create(activity, Ui.BG, ThemeGradient.STARTS[i],
-                    ThemeGradient.ENDS[i], 315, 100, 13));
-            tile.setContentDescription("Appliquer le dégradé " + ThemeGradient.NAMES[i]);
-            tile.setOnClickListener(v -> {
-                actions.onGradient(ThemeGradient.STARTS[at], ThemeGradient.ENDS[at], 315, 85, true);
-                refreshState();
+    private void drawImageControls() {
+        controls.addView(text("UNE IMAGE POUR "+ROLE_NAMES[selectedRole].toUpperCase(Locale.FRANCE),12,Ui.TEXT,true));
+        controls.addView(Ui.gap(activity,9));
+        String note=selectedRole==0
+                ? "Votre image colore les boutons et les éléments accentués."
+                : selectedRole==1
+                ? "Votre photo s'affiche doucement derrière la bibliothèque pour garder les titres lisibles."
+                : "Votre image remplit les caractères des titres et des libellés principaux.";
+        controls.addView(text(note,12,Ui.MUTED,false));
+        controls.addView(Ui.gap(activity,12));
+        TextView pick=button("▣  Choisir une image",true);
+        pick.setOnClickListener(v->actions.onChooseImage(role()));
+        controls.addView(pick,Ui.lp(activity,-1,52));
+        String saved=ThemeStyle.imageUri(activity,role());
+        if(saved!=null && !saved.isEmpty()) {
+            controls.addView(Ui.gap(activity,10));
+            TextView clear=button("Retirer l'image",false);
+            clear.setOnClickListener(v->{
+                prefs.edit().remove("theme_"+role()+"_image")
+                        .putString("theme_"+role()+"_mode","solid").apply();
+                if("background".equals(role()))prefs.edit().remove("theme_wallpaper").apply();
+                actions.onChanged();
+                refresh();
             });
-            GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
-            lp.columnSpec = GridLayout.spec(i % 2, 1, 1f);
-            lp.rowSpec = GridLayout.spec(i / 2);
-            lp.width = 0;
-            lp.height = d(69);
-            lp.setMargins(d(3), d(3), d(3), d(3));
-            presets.addView(tile, lp);
+            controls.addView(clear,Ui.lp(activity,-1,45));
         }
-        group.addView(presets, layout(-1, -2));
-        group.addView(Ui.gap(activity, 11));
-        TextView disable = actionRow("Couleur unie", "Désactiver le dégradé et conserver la couleur de fond", "◯");
-        disable.setOnClickListener(v -> {
-            actions.onGradient(gradientStart(), gradientEnd(), gradientAngle(), gradientStrength(), false);
-            refreshState();
-        });
-        group.addView(disable);
-        group.addView(Ui.gap(activity, 13));
-        group.addView(text("AJUSTER MON DÉGRADÉ", 11, Ui.MUTED, true));
-        group.addView(Ui.gap(activity, 8));
-        LinearLayout colorButtons = Ui.horizontal(activity);
-        gradientStartButton = makeTab("1 · Départ");
-        gradientEndButton = makeTab("2 · Arrivée");
-        colorButtons.addView(gradientStartButton, new LinearLayout.LayoutParams(0, d(47), 1f));
-        LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, d(47), 1f);
-        second.leftMargin = d(9);
-        colorButtons.addView(gradientEndButton, second);
-        gradientStartButton.setOnClickListener(v -> { gradientSlot = 0; refreshState(); });
-        gradientEndButton.setOnClickListener(v -> { gradientSlot = 1; refreshState(); });
-        group.addView(colorButtons);
-        group.addView(Ui.gap(activity, 12));
-        angleDescription = text("Direction · Diagonale", 13, Ui.TEXT, true);
-        group.addView(angleDescription);
-        angleSeek = new SeekBar(activity);
-        angleSeek.setMax(7);
-        angleSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-                if (!fromUser) return;
-                angleDescription.setText("Direction · " + ((progress * 45)) + "°");
-                preview.setBackground(ThemeGradient.create(activity, Ui.BG,
-                        gradientStart(), gradientEnd(), progress * 45, gradientStrength(), 19));
-            }
-            public void onStartTrackingTouch(SeekBar bar) {}
-            public void onStopTrackingTouch(SeekBar bar) {
-                actions.onGradient(gradientStart(), gradientEnd(), bar.getProgress() * 45, gradientStrength(), true);
-                refreshState();
-            }
-        });
-        group.addView(angleSeek, layout(-1, d(44)));
-        intensityDescription = text("Intensité · 85 %", 13, Ui.TEXT, true);
-        group.addView(intensityDescription);
-        intensitySeek = new SeekBar(activity);
-        intensitySeek.setMax(100);
-        intensitySeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-                if (!fromUser) return;
-                intensityDescription.setText("Intensité · " + progress + " %");
-                preview.setBackground(ThemeGradient.create(activity, Ui.BG,
-                        gradientStart(), gradientEnd(), gradientAngle(), progress, 19));
-            }
-            public void onStartTrackingTouch(SeekBar bar) {}
-            public void onStopTrackingTouch(SeekBar bar) {
-                actions.onGradient(gradientStart(), gradientEnd(), gradientAngle(), bar.getProgress(), true);
-                refreshState();
-            }
-        });
-        group.addView(intensitySeek, layout(-1, d(44)));
-        group.addView(text("Astuce : garde une intensité douce pour que les textes restent faciles à lire.",
-                11, Ui.MUTED, false));
-        return group;
+        controls.addView(Ui.gap(activity,8));
+        controls.addView(text("Seules les images de votre téléphone sont utilisées. Aucune image n'est envoyée à GitHub.",11,Ui.MUTED,false));
     }
 
-    private int gradientStart() { return prefs.getInt("theme_gradient_start", ThemeGradient.STARTS[0]); }
-    private int gradientEnd() { return prefs.getInt("theme_gradient_end", ThemeGradient.ENDS[0]); }
-    private int gradientAngle() { return prefs.getInt("theme_gradient_angle", 315); }
-    private int gradientStrength() { return prefs.getInt("theme_gradient_strength", 85); }
-
-    private void refreshGradientControls() {
-        int accent = currentColor(0);
-        int ink = perceivedLuma(accent) > 135 ? 0xFF121820 : Color.WHITE;
-        gradientStartButton.setBackground(Ui.shape(gradientSlot == 0 ? accent : 0xFF303A45, 12, activity));
-        gradientEndButton.setBackground(Ui.shape(gradientSlot == 1 ? accent : 0xFF303A45, 12, activity));
-        gradientStartButton.setTextColor(gradientSlot == 0 ? ink : Ui.TEXT);
-        gradientEndButton.setTextColor(gradientSlot == 1 ? ink : Ui.TEXT);
-        angleSeek.setProgress(gradientAngle() / 45);
-        intensitySeek.setProgress(gradientStrength());
-        angleDescription.setText("Direction · " + gradientAngle() + "°");
-        intensityDescription.setText("Intensité · " + gradientStrength() + " %");
+    private int[] presetStart() {
+        return selectedRole==0?ACCENT_STARTS[0]:selectedRole==2?TEXT_STARTS[0]:ThemeGradient.STARTS;
     }
-
-    private void selectTab(int tab) {
-        if (hexField != null) hexField.clearFocus();
-        colorTab = tab;
-        refreshState();
+    private int[] presetEnd() {
+        return selectedRole==0?ACCENT_STARTS[1]:selectedRole==2?TEXT_STARTS[1]:ThemeGradient.ENDS;
     }
-
-    private void save(int tab, int color) {
-        if (hexField != null) hexField.clearFocus();
-        actions.onColor(colorKey(tab), color);
-        // The editor's Dialog is deliberately left open: no dismissal or Activity.recreate().
-        refreshState();
-    }
-
-    public void refreshState() {
-        if (dialog == null || !dialog.isShowing() || swatches == null) return;
-        int selected = currentColor(colorTab);
-        int bg = Ui.BG;
-        int accent = currentColor(0);
-        preview.setBackground(Ui.outlined(bg, 0xFF55606F, 19, activity));
-        previewChip.setBackground(Ui.shape(accent, 13, activity));
-        previewChip.setTextColor(perceivedLuma(accent) > 135 ? 0xFF161B22 : Color.WHITE);
-        previewCaption.setTextColor(Ui.MUTED);
-        boolean hasImage = !prefs.getString("theme_wallpaper", "").isEmpty();
-        previewCaption.setText(hasImage ? "Image en arrière-plan" : "Aperçu de votre bibliothèque");
-        int activeTabText = perceivedLuma(accent) > 135 ? 0xFF101712 : Color.WHITE;
-        accentButton.setTextColor(colorTab == 0 ? activeTabText : Ui.TEXT);
-        backgroundButton.setTextColor(colorTab == 1 ? activeTabText : Ui.TEXT);
-        textColorButton.setTextColor(colorTab == 2 ? activeTabText : Ui.TEXT);
-        gradientButton.setTextColor(colorTab == 3 ? activeTabText : Ui.TEXT);
-        accentButton.setBackground(Ui.shape(colorTab == 0 ? accent : 0xFF303A45, 13, activity));
-        backgroundButton.setBackground(Ui.shape(colorTab == 1 ? accent : 0xFF303A45, 13, activity));
-        textColorButton.setBackground(Ui.shape(colorTab == 2 ? accent : 0xFF303A45, 13, activity));
-        gradientButton.setBackground(Ui.shape(colorTab == 3 ? accent : 0xFF303A45, 13, activity));
-        gradientPanel.setVisibility(colorTab == 3 ? View.VISIBLE : View.GONE);
-        if (colorTab == 3) refreshGradientControls();
-        applyHexButton.setTextColor(activeTabText);
-        applyHexButton.setBackground(Ui.shape(accent, 12, activity));
-        selectedLabel.setText(colorTab == 0 ? "Couleur principale" : colorTab == 1 ? "Couleur du fond"
-                : colorTab == 2 ? "Couleur du texte" : gradientSlot == 0 ? "Couleur de départ" : "Couleur d’arrivée");
-        colorPicker.setColor(selected);
-        updatePreview(selected);
-        if (!hexField.hasFocus()) {
-            hexField.setText(hex(selected));
-            hexField.setSelection(hexField.length());
+    private void drawGradientControls() {
+        controls.addView(text("AMBIANCES PRÊTES À UTILISER",11,Ui.MUTED,true));
+        controls.addView(Ui.gap(activity,8));
+        GridLayout presets=new GridLayout(activity);
+        presets.setColumnCount(2);
+        int[] starts=presetStart(), ends=presetEnd();
+        for(int i=0;i<PRESET_NAMES.length;i++) {
+            final int idx=i;
+            TextView tile=text(PRESET_NAMES[i],13,roleContrast(ThemeGradient.blend(starts[i],ends[i],.5f)),true);
+            tile.setGravity(Gravity.CENTER_VERTICAL);
+            tile.setPadding(d(12),d(8),d(7),d(8));
+            tile.setBackground(Ui.gradient(starts[i],ends[i],12,activity));
+            tile.setContentDescription("Appliquer le dégradé "+PRESET_NAMES[i]+" pour "+ROLE_NAMES[selectedRole]);
+            tile.setOnClickListener(v->setGradient(starts[idx],ends[idx],315,100));
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();
+            lp.columnSpec=GridLayout.spec(i%2,1,1f);
+            lp.rowSpec=GridLayout.spec(i/2);
+            lp.width=0;lp.height=d(52);
+            lp.setMargins(d(3),d(3),d(3),d(3));
+            presets.addView(tile,lp);
         }
-        swatches.removeAllViews();
-        int[] colors = colorTab == 0 ? ACCENTS : colorTab == 1 ? BACKGROUNDS : colorTab == 2 ? TEXT_COLORS : ACCENTS;
-        String[] names = colorTab == 0 ? ACCENT_NAMES : colorTab == 1 ? BACKGROUND_NAMES : colorTab == 2 ? TEXT_COLOR_NAMES : ACCENT_NAMES;
-        for (int i = 0; i < colors.length; i++) {
-            final int chosen = colors[i];
-            LinearLayout cell = Ui.vertical(activity);
+        controls.addView(presets,Ui.lp(activity,-1,-2));
+        controls.addView(Ui.gap(activity,13));
+        controls.addView(text("MES DEUX COULEURS",11,Ui.MUTED,true));
+        controls.addView(Ui.gap(activity,8));
+        LinearLayout stops=Ui.horizontal(activity);
+        TextView a=button("1 · Départ",selectedStop==0);
+        TextView b=button("2 · Arrivée",selectedStop==1);
+        a.setBackground(ThemeStyle.surface(activity,role(),10));
+        b.setBackground(Ui.shape(ThemeStyle.end(activity,role()),10,activity));
+        a.setBackground(Ui.shape(ThemeStyle.start(activity,role()),10,activity));
+        a.setTextColor(roleContrast(ThemeStyle.start(activity,role())));
+        b.setTextColor(roleContrast(ThemeStyle.end(activity,role())));
+        if(selectedStop==0)a.setText("✓  1 · Départ");
+        else b.setText("✓  2 · Arrivée");
+        a.setOnClickListener(v->{selectedStop=0;refresh();});
+        b.setOnClickListener(v->{selectedStop=1;refresh();});
+        LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(0,d(48),1f);
+        sp.rightMargin=d(8);
+        stops.addView(a,sp);
+        stops.addView(b,new LinearLayout.LayoutParams(0,d(48),1f));
+        controls.addView(stops);
+        controls.addView(Ui.gap(activity,10));
+
+        TextView direction=text("Direction · "+ThemeStyle.angle(activity,role())+"°",12,Ui.TEXT,true);
+        controls.addView(direction);
+        SeekBar angle=new SeekBar(activity);
+        angle.setMax(7);
+        angle.setProgress(ThemeStyle.angle(activity,role())/45);
+        angle.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
+                if(fromUser)direction.setText("Direction · "+(progress*45)+"°");
+            }
+            public void onStartTrackingTouch(SeekBar bar){}
+            public void onStopTrackingTouch(SeekBar bar){
+                prefs.edit().putInt("theme_"+role()+"_angle",bar.getProgress()*45).apply();
+                actions.onChanged();updatePreview();
+            }
+        });
+        controls.addView(angle,Ui.lp(activity,-1,d(40)));
+        TextView intensity=text("Intensité · "+ThemeStyle.strength(activity,role())+" %",12,Ui.TEXT,true);
+        controls.addView(intensity);
+        SeekBar strength=new SeekBar(activity);
+        strength.setMax(100);
+        strength.setProgress(ThemeStyle.strength(activity,role()));
+        strength.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
+                if(fromUser)intensity.setText("Intensité · "+progress+" %");
+            }
+            public void onStartTrackingTouch(SeekBar bar){}
+            public void onStopTrackingTouch(SeekBar bar){
+                prefs.edit().putInt("theme_"+role()+"_strength",bar.getProgress()).apply();
+                actions.onChanged();updatePreview();
+            }
+        });
+        controls.addView(strength,Ui.lp(activity,-1,d(40)));
+        controls.addView(Ui.gap(activity,8));
+    }
+
+    private void drawColorControls() {
+        boolean gradient="gradient".equals(mode());
+        controls.addView(text(gradient?(selectedStop==0?"COULEUR DE DÉPART":"COULEUR D'ARRIVÉE"):
+                "CHOISIR UNE COULEUR",11,Ui.MUTED,true));
+        controls.addView(Ui.gap(activity,8));
+        int color=gradient?(selectedStop==0?ThemeStyle.start(activity,role()):ThemeStyle.end(activity,role())):
+                ThemeStyle.solid(activity,role());
+        ColorPickerView picker=new ColorPickerView(activity);
+        picker.setColor(color);
+        TextView label=text("Glissez dans le carré ou la barre arc-en-ciel.",11,Ui.MUTED,false);
+        controls.addView(label);
+        controls.addView(Ui.gap(activity,5));
+        TextView sample=text("",14,Ui.TEXT,true);
+        picker.setListener((chosen,finished)->{
+            sample.setBackground(Ui.shape(chosen,10,activity));
+            if(finished) saveColor(chosen);
+        });
+        controls.addView(picker,Ui.lp(activity,-1,240));
+        controls.addView(Ui.gap(activity,7));
+        sample.setBackground(Ui.shape(color,10,activity));
+        sample.setContentDescription("Couleur sélectionnée");
+        controls.addView(sample,Ui.lp(activity,-1,12));
+        controls.addView(Ui.gap(activity,11));
+        controls.addView(text("COULEURS RAPIDES",11,Ui.MUTED,true));
+        controls.addView(Ui.gap(activity,7));
+        GridLayout palette=new GridLayout(activity);
+        palette.setColumnCount(4);
+        int[] choices=SOLIDS[selectedRole];
+        for(int i=0;i<choices.length;i++){
+            final int c=choices[i];
+            TextView cell=text(c==color?"✓":"",19,roleContrast(c),true);
             cell.setGravity(Gravity.CENTER);
-            cell.setPadding(d(5), d(7), d(5), d(12));
-            TextView circle = text(chosen == selected ? "✓" : "", 20,
-                    perceivedLuma(chosen) > 135 ? 0xFF1B2027 : Color.WHITE, true);
-            circle.setGravity(Gravity.CENTER);
-            GradientDrawable fill = Ui.shape(chosen, 30, activity);
-            fill.setStroke(d(chosen == selected ? 3 : 1),
-                    chosen == selected ? Color.WHITE : 0xFF667280);
-            circle.setBackground(fill);
-            cell.addView(circle, layout(47, 47));
-            TextView name = text(names[i], 10, Ui.MUTED, false);
-            name.setGravity(Gravity.CENTER);
-            name.setSingleLine(true);
-            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            LinearLayout.LayoutParams np = layout(-1, 26);
-            np.topMargin = d(5);
-            cell.addView(name, np);
-            cell.setContentDescription(names[i] + (chosen == selected ? ", sélectionné" : ", toucher pour appliquer"));
-            cell.setOnClickListener(v -> save(colorTab, chosen));
-            GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
-            lp.width = 0;
-            lp.height = -2;
-            lp.columnSpec = GridLayout.spec(i % 4, 1, 1f);
-            lp.rowSpec = GridLayout.spec(i / 4);
-            swatches.addView(cell, lp);
+            GradientDrawable fill = new GradientDrawable();
+            fill.setColor(c);
+            fill.setCornerRadius(d(25));
+            fill.setStroke(d(c==color?3:1), c==color?Color.WHITE:0xFF6E7C8C);
+            cell.setBackground(fill);
+            cell.setContentDescription(String.format(Locale.ROOT,"Couleur #%06X",c & 0xFFFFFF));
+            cell.setOnClickListener(v->saveColor(c));
+            GridLayout.LayoutParams cp=new GridLayout.LayoutParams();
+            cp.columnSpec=GridLayout.spec(i%4,1,1f);
+            cp.rowSpec=GridLayout.spec(i/4);
+            cp.width=0;cp.height=d(51);
+            cp.setMargins(d(4),d(4),d(4),d(4));
+            palette.addView(cell,cp);
         }
-    }
-
-    /** While the finger moves only the preview changes; the full activity is refreshed on release. */
-    private void updatePreview(int chosen) {
-        if (preview == null || sampleCircle == null) return;
-        int displayedAccent = colorTab == 0 ? chosen : currentColor(0);
-        int displayedBackground = colorTab == 1 ? chosen : currentColor(1);
-        int displayedText = colorTab == 2 ? chosen : currentColor(2);
-        // The actual player darkens bright backgrounds to keep its light text readable.
-        int readableBackground = Ui.effectiveBackground(displayedBackground);
-        if (colorTab == 3 || prefs.getBoolean("theme_gradient_enabled", false)) {
-            int start = prefs.getInt("theme_gradient_start", ThemeGradient.STARTS[0]);
-            int end = prefs.getInt("theme_gradient_end", ThemeGradient.ENDS[0]);
-            if (colorTab == 3) {
-                if (gradientSlot == 0) start = chosen;
-                else end = chosen;
+        controls.addView(palette,Ui.lp(activity,-1,-2));
+        controls.addView(Ui.gap(activity,7));
+        TextView advanced=text("▸ Code HEX (option avancée)",12,Ui.MUTED,false);
+        advanced.setPadding(d(7),d(8),d(7),d(8));
+        controls.addView(advanced);
+        LinearLayout hexRow=Ui.horizontal(activity);
+        hexRow.setVisibility(View.GONE);
+        EditText field=new EditText(activity);
+        field.setSingleLine(true);
+        field.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        field.setTextColor(Ui.TEXT);
+        field.setHintTextColor(Ui.MUTED);
+        field.setTextSize(14);
+        field.setText(String.format(Locale.ROOT,"#%06X",color&0xFFFFFF));
+        field.setSelectAllOnFocus(true);
+        field.setBackground(Ui.outlined(Ui.SURFACE,0xFF556474,10,activity));
+        field.setPadding(d(9),d(4),d(5),d(4));
+        hexRow.addView(field,new LinearLayout.LayoutParams(0,d(43),1f));
+        TextView apply=button("Valider",true);
+        apply.setOnClickListener(v->{
+            String value=field.getText().toString().trim();
+            if(!value.matches("(?i)#[0-9a-f]{6}")){
+                field.setError("Format : #A8F36A");
+                return;
             }
-            preview.setBackground(ThemeGradient.create(activity, readableBackground, start, end,
-                    prefs.getInt("theme_gradient_angle", 315),
-                    prefs.getInt("theme_gradient_strength", 85), 19));
-        } else preview.setBackground(Ui.outlined(readableBackground, 0xFF55606F, 19, activity));
-        previewChip.setBackground(Ui.shape(displayedAccent, 13, activity));
-        previewChip.setTextColor(perceivedLuma(displayedAccent) > 135 ? 0xFF161B22 : Color.WHITE);
-        previewTitle.setTextColor(displayedText);
-        previewCaption.setTextColor(colorTab == 2 ? displayedText : currentColor(2));
-        sampleCircle.setBackground(Ui.outlined(chosen, 0xFFEBEFF3, 22, activity));
-        sampleCircle.setTextColor(perceivedLuma(chosen) > 135 ? 0xFF151B20 : Color.WHITE);
-        if (pickerHint != null) {
-            if (colorTab == 2 && contrastRatio(displayedText, readableBackground) < 4.5f) {
-                pickerHint.setText("Attention : ce texte risque d'être difficile à lire sur le fond choisi.");
-            } else if (colorTab == 3) {
-                pickerHint.setText("Choisis la nuance du premier ou du second côté du dégradé.");
-            } else if (colorTab == 1 && readableBackground != displayedBackground) {
-                pickerHint.setText("Le fond choisi est légèrement assombri pour faciliter la lecture.");
-            } else {
-                pickerHint.setText("Glissez dans le carré pour la nuance, puis sur la barre arc-en-ciel pour la teinte.");
-            }
-        }
+            saveColor(Color.parseColor(value));
+        });
+        LinearLayout.LayoutParams hp=Ui.lp(activity,-2,43);
+        hp.leftMargin=d(8);
+        hexRow.addView(apply,hp);
+        controls.addView(hexRow);
+        advanced.setOnClickListener(v->{
+            boolean open=hexRow.getVisibility()!=View.VISIBLE;
+            hexRow.setVisibility(open?View.VISIBLE:View.GONE);
+            advanced.setText(open?"▾ Masquer le code HEX":"▸ Code HEX (option avancée)");
+        });
     }
 
-    private static float contrastRatio(int a, int b) {
-        float l1 = contrastLuminance(a), l2 = contrastLuminance(b);
-        return (Math.max(l1, l2) + .05f) / (Math.min(l1, l2) + .05f);
-    }
-    private static float contrastLuminance(int c) {
-        float r = linear(Color.red(c) / 255f);
-        float g = linear(Color.green(c) / 255f);
-        float b = linear(Color.blue(c) / 255f);
-        return .2126f * r + .7152f * g + .0722f * b;
-    }
-    private static float linear(float value) {
-        return value <= .04045f ? value / 12.92f : (float)Math.pow((value + .055f) / 1.055f, 2.4);
-    }
-    private static int perceivedLuma(int value) {
-        return (Color.red(value) * 299 + Color.green(value) * 587 + Color.blue(value) * 114) / 1000;
-    }
-
-    private void setCollapsed(boolean value) {
-        if (collapsed == value) return;
-        collapsed = value;
-        if (scrollView != null) scrollView.setVisibility(collapsed ? View.GONE : View.VISIBLE);
-        if (dialog != null && dialog.getWindow() != null)
-            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-    }
-
-    public void dismiss() {
-        if (dialog != null) dialog.dismiss();
-    }
+    public void dismiss(){ if(dialog!=null) dialog.dismiss(); }
 }
