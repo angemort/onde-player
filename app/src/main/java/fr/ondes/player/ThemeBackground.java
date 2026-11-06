@@ -13,6 +13,7 @@ import java.io.InputStream;
 public final class ThemeBackground {
     private ThemeBackground() {}
     public static void attach(Context context, FrameLayout parent) {
+        ThemeGradient.apply(context, parent);
         String saved = context.getSharedPreferences("onde_settings", Context.MODE_PRIVATE)
                 .getString("theme_wallpaper", "");
         if (saved == null || saved.isEmpty()) return;
