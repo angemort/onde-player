@@ -2,7 +2,7 @@
 
 Application Android Java pour écouter les musiques et les vidéos stockées sur le téléphone : playlists, file d’attente, égaliseur, historique des écoutes, thème personnalisable et lecteur plein écran.
 
-**Version actuelle des sources :** 3.6.0 (`versionCode 12`).
+**Version actuelle des sources :** 3.7.0 (`versionCode 13`).
 
 - Documentation détaillée : [Guide AndroidIDE](docs/ANDROIDIDE.md)
 - Publication et signature des APK : [Guide de publication](docs/PUBLICATION.md)
