@@ -86,6 +86,38 @@ public final class ThemeStyle {
         int fallback = "background".equals(role) ? p.getInt("theme_gradient_strength", 85) : 100;
         return ThemeGradient.clamp(p.getInt("theme_" + role + "_strength", fallback), 0, 100);
     }
+    /**
+     * One representative color for derived UI tokens. Gradient roles use the
+     * average of both stops; local images use a tiny sampled grid. The actual
+     * drawable/shader remains a full gradient or the user's chosen image.
+     */
+    public static int representativeColor(Context c, String role) {
+        String variant = mode(c, role);
+        if ("gradient".equals(variant)) {
+            int[] pair = stops(c, role);
+            return ThemePalette.mix(pair[0], pair[1], .5f);
+        }
+        if ("image".equals(variant)) {
+            Bitmap b = picture(c, role);
+            if (b != null && b.getWidth() > 0 && b.getHeight() > 0) {
+                long r=0,g=0,blue=0;
+                int sampleCount=0;
+                try {
+                    for (int y=1;y<8;y+=2) for (int x=1;x<8;x+=2) {
+                        int pixel=b.getPixel(Math.min(b.getWidth()-1,x*b.getWidth()/8),
+                                             Math.min(b.getHeight()-1,y*b.getHeight()/8));
+                        r += Color.red(pixel); g += Color.green(pixel);
+                        blue += Color.blue(pixel);
+                        sampleCount++;
+                    }
+                    if (sampleCount > 0) return Color.rgb((int)(r/sampleCount),
+                            (int)(g/sampleCount), (int)(blue/sampleCount));
+                } catch (RuntimeException ignored) { /* solid fallback */ }
+            }
+        }
+        return solid(c, role);
+    }
+
     public static int[] stops(Context c, String role) {
         int base = "background".equals(role) ? Ui.effectiveBackground(solid(c, role)) : solid(c, role);
         int a = start(c, role), b = end(c, role);
