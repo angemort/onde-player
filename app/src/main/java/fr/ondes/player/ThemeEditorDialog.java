@@ -19,6 +19,7 @@ import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import java.util.Locale;
 
@@ -26,6 +27,7 @@ import java.util.Locale;
 public final class ThemeEditorDialog {
     public interface Actions {
         void onColor(String preferenceKey, int color);
+        void onGradient(int start, int end, int angle, int intensity, boolean enabled);
         void onPickWallpaper();
         void onClearWallpaper();
         void onReset();
@@ -58,12 +60,16 @@ public final class ThemeEditorDialog {
     private final Actions actions;
     private final SharedPreferences prefs;
     private Dialog dialog;
-    // 0: accent, 1: background, 2: main text.
+    // 0: accent, 1: background, 2: main text, 3: two-color gradient.
     private int colorTab = 0;
+    private int gradientSlot = 0;
     private GridLayout swatches;
     private FrameLayout preview;
     private TextView previewTitle, previewCaption, previewChip;
-    private TextView accentButton, backgroundButton, textColorButton, imageButton;
+    private TextView accentButton, backgroundButton, textColorButton, gradientButton, imageButton;
+    private LinearLayout gradientPanel;
+    private TextView gradientStartButton, gradientEndButton, angleDescription, intensityDescription;
+    private SeekBar angleSeek, intensitySeek;
     private EditText hexField;
     private TextView selectedLabel;
     private ColorPickerView colorPicker;
@@ -86,11 +92,13 @@ public final class ThemeEditorDialog {
 
     private int d(float dp) { return Ui.dp(activity, dp); }
     private String colorKey(int tab) {
-        return tab == 0 ? "theme_accent" : tab == 1 ? "theme_background" : "theme_text";
+        return tab == 0 ? "theme_accent" : tab == 1 ? "theme_background" : tab == 2 ? "theme_text"
+                : gradientSlot == 0 ? "theme_gradient_start" : "theme_gradient_end";
     }
     private int currentColor(int tab) {
         return prefs.getInt(colorKey(tab),
-                tab == 0 ? ACCENTS[0] : tab == 1 ? BACKGROUNDS[0] : 0xFFF5F8FB);
+                tab == 0 ? ACCENTS[0] : tab == 1 ? BACKGROUNDS[0] : tab == 2 ? 0xFFF5F8FB
+                        : gradientSlot == 0 ? ThemeGradient.STARTS[0] : ThemeGradient.ENDS[0]);
     }
     private String hex(int color) { return String.format(Locale.ROOT, "#%06X", color & 0xFFFFFF); }
     private TextView text(String value, int size, int color, boolean bold) {
@@ -182,18 +190,20 @@ public final class ThemeEditorDialog {
         accentButton = makeTab("Accent");
         backgroundButton = makeTab("Fond");
         textColorButton = makeTab("Texte");
-        tabs.addView(accentButton, new LinearLayout.LayoutParams(0, d(48), 1f));
-        LinearLayout.LayoutParams middle = new LinearLayout.LayoutParams(0, d(48), 1f);
-        middle.leftMargin = d(10);
-        tabs.addView(backgroundButton, middle);
-        LinearLayout.LayoutParams right = new LinearLayout.LayoutParams(0, d(48), 1f);
-        right.leftMargin = d(10);
-        tabs.addView(textColorButton, right);
-        accentButton.setOnClickListener(v -> selectTab(0));
-        backgroundButton.setOnClickListener(v -> selectTab(1));
-        textColorButton.setOnClickListener(v -> selectTab(2));
+        gradientButton = makeTab("Dégradé");
+        TextView[] themeTabs = {accentButton, backgroundButton, textColorButton, gradientButton};
+        for (int i = 0; i < themeTabs.length; i++) {
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, d(48), 1f);
+            if (i > 0) p.leftMargin = d(7);
+            tabs.addView(themeTabs[i], p);
+            final int tab = i;
+            themeTabs[i].setOnClickListener(v -> selectTab(tab));
+        }
         body.addView(tabs);
         body.addView(Ui.gap(activity, 14));
+        gradientPanel = buildGradientPanel();
+        body.addView(gradientPanel);
+        body.addView(Ui.gap(activity, 10));
 
         // Visual color selection comes first; no hexadecimal input is required.
         selectedLabel = text("Personnalisez votre couleur", 13, Ui.TEXT, true);
@@ -324,6 +334,113 @@ public final class ThemeEditorDialog {
         return view;
     }
 
+    private LinearLayout buildGradientPanel() {
+        LinearLayout group = Ui.vertical(activity);
+        group.addView(text("AMBIANCES PRÊTES À UTILISER", 11, Ui.MUTED, true));
+        group.addView(Ui.gap(activity, 8));
+        GridLayout presets = new GridLayout(activity);
+        presets.setColumnCount(2);
+        for (int i = 0; i < ThemeGradient.NAMES.length; i++) {
+            final int at = i;
+            TextView tile = text(ThemeGradient.NAMES[i], 13, Color.WHITE, true);
+            tile.setGravity(Gravity.BOTTOM | Gravity.LEFT);
+            tile.setPadding(d(12), d(11), d(10), d(11));
+            tile.setBackground(ThemeGradient.create(activity, Ui.BG, ThemeGradient.STARTS[i],
+                    ThemeGradient.ENDS[i], 315, 100, 13));
+            tile.setContentDescription("Appliquer le dégradé " + ThemeGradient.NAMES[i]);
+            tile.setOnClickListener(v -> {
+                actions.onGradient(ThemeGradient.STARTS[at], ThemeGradient.ENDS[at], 315, 85, true);
+                refreshState();
+            });
+            GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
+            lp.columnSpec = GridLayout.spec(i % 2, 1, 1f);
+            lp.rowSpec = GridLayout.spec(i / 2);
+            lp.width = 0;
+            lp.height = d(69);
+            lp.setMargins(d(3), d(3), d(3), d(3));
+            presets.addView(tile, lp);
+        }
+        group.addView(presets, layout(-1, -2));
+        group.addView(Ui.gap(activity, 11));
+        TextView disable = actionRow("Couleur unie", "Désactiver le dégradé et conserver la couleur de fond", "◯");
+        disable.setOnClickListener(v -> {
+            actions.onGradient(gradientStart(), gradientEnd(), gradientAngle(), gradientStrength(), false);
+            refreshState();
+        });
+        group.addView(disable);
+        group.addView(Ui.gap(activity, 13));
+        group.addView(text("AJUSTER MON DÉGRADÉ", 11, Ui.MUTED, true));
+        group.addView(Ui.gap(activity, 8));
+        LinearLayout colorButtons = Ui.horizontal(activity);
+        gradientStartButton = makeTab("1 · Départ");
+        gradientEndButton = makeTab("2 · Arrivée");
+        colorButtons.addView(gradientStartButton, new LinearLayout.LayoutParams(0, d(47), 1f));
+        LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, d(47), 1f);
+        second.leftMargin = d(9);
+        colorButtons.addView(gradientEndButton, second);
+        gradientStartButton.setOnClickListener(v -> { gradientSlot = 0; refreshState(); });
+        gradientEndButton.setOnClickListener(v -> { gradientSlot = 1; refreshState(); });
+        group.addView(colorButtons);
+        group.addView(Ui.gap(activity, 12));
+        angleDescription = text("Direction · Diagonale", 13, Ui.TEXT, true);
+        group.addView(angleDescription);
+        angleSeek = new SeekBar(activity);
+        angleSeek.setMax(7);
+        angleSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                if (!fromUser) return;
+                angleDescription.setText("Direction · " + ((progress * 45)) + "°");
+                preview.setBackground(ThemeGradient.create(activity, Ui.BG,
+                        gradientStart(), gradientEnd(), progress * 45, gradientStrength(), 19));
+            }
+            public void onStartTrackingTouch(SeekBar bar) {}
+            public void onStopTrackingTouch(SeekBar bar) {
+                actions.onGradient(gradientStart(), gradientEnd(), bar.getProgress() * 45, gradientStrength(), true);
+                refreshState();
+            }
+        });
+        group.addView(angleSeek, layout(-1, d(44)));
+        intensityDescription = text("Intensité · 85 %", 13, Ui.TEXT, true);
+        group.addView(intensityDescription);
+        intensitySeek = new SeekBar(activity);
+        intensitySeek.setMax(100);
+        intensitySeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                if (!fromUser) return;
+                intensityDescription.setText("Intensité · " + progress + " %");
+                preview.setBackground(ThemeGradient.create(activity, Ui.BG,
+                        gradientStart(), gradientEnd(), gradientAngle(), progress, 19));
+            }
+            public void onStartTrackingTouch(SeekBar bar) {}
+            public void onStopTrackingTouch(SeekBar bar) {
+                actions.onGradient(gradientStart(), gradientEnd(), gradientAngle(), bar.getProgress(), true);
+                refreshState();
+            }
+        });
+        group.addView(intensitySeek, layout(-1, d(44)));
+        group.addView(text("Astuce : garde une intensité douce pour que les textes restent faciles à lire.",
+                11, Ui.MUTED, false));
+        return group;
+    }
+
+    private int gradientStart() { return prefs.getInt("theme_gradient_start", ThemeGradient.STARTS[0]); }
+    private int gradientEnd() { return prefs.getInt("theme_gradient_end", ThemeGradient.ENDS[0]); }
+    private int gradientAngle() { return prefs.getInt("theme_gradient_angle", 315); }
+    private int gradientStrength() { return prefs.getInt("theme_gradient_strength", 85); }
+
+    private void refreshGradientControls() {
+        int accent = currentColor(0);
+        int ink = perceivedLuma(accent) > 135 ? 0xFF121820 : Color.WHITE;
+        gradientStartButton.setBackground(Ui.shape(gradientSlot == 0 ? accent : 0xFF303A45, 12, activity));
+        gradientEndButton.setBackground(Ui.shape(gradientSlot == 1 ? accent : 0xFF303A45, 12, activity));
+        gradientStartButton.setTextColor(gradientSlot == 0 ? ink : Ui.TEXT);
+        gradientEndButton.setTextColor(gradientSlot == 1 ? ink : Ui.TEXT);
+        angleSeek.setProgress(gradientAngle() / 45);
+        intensitySeek.setProgress(gradientStrength());
+        angleDescription.setText("Direction · " + gradientAngle() + "°");
+        intensityDescription.setText("Intensité · " + gradientStrength() + " %");
+    }
+
     private void selectTab(int tab) {
         if (hexField != null) hexField.clearFocus();
         colorTab = tab;
@@ -352,12 +469,17 @@ public final class ThemeEditorDialog {
         accentButton.setTextColor(colorTab == 0 ? activeTabText : Ui.TEXT);
         backgroundButton.setTextColor(colorTab == 1 ? activeTabText : Ui.TEXT);
         textColorButton.setTextColor(colorTab == 2 ? activeTabText : Ui.TEXT);
+        gradientButton.setTextColor(colorTab == 3 ? activeTabText : Ui.TEXT);
         accentButton.setBackground(Ui.shape(colorTab == 0 ? accent : 0xFF303A45, 13, activity));
         backgroundButton.setBackground(Ui.shape(colorTab == 1 ? accent : 0xFF303A45, 13, activity));
         textColorButton.setBackground(Ui.shape(colorTab == 2 ? accent : 0xFF303A45, 13, activity));
+        gradientButton.setBackground(Ui.shape(colorTab == 3 ? accent : 0xFF303A45, 13, activity));
+        gradientPanel.setVisibility(colorTab == 3 ? View.VISIBLE : View.GONE);
+        if (colorTab == 3) refreshGradientControls();
         applyHexButton.setTextColor(activeTabText);
         applyHexButton.setBackground(Ui.shape(accent, 12, activity));
-        selectedLabel.setText(colorTab == 0 ? "Couleur principale" : colorTab == 1 ? "Couleur du fond" : "Couleur du texte");
+        selectedLabel.setText(colorTab == 0 ? "Couleur principale" : colorTab == 1 ? "Couleur du fond"
+                : colorTab == 2 ? "Couleur du texte" : gradientSlot == 0 ? "Couleur de départ" : "Couleur d’arrivée");
         colorPicker.setColor(selected);
         updatePreview(selected);
         if (!hexField.hasFocus()) {
@@ -365,8 +487,8 @@ public final class ThemeEditorDialog {
             hexField.setSelection(hexField.length());
         }
         swatches.removeAllViews();
-        int[] colors = colorTab == 0 ? ACCENTS : colorTab == 1 ? BACKGROUNDS : TEXT_COLORS;
-        String[] names = colorTab == 0 ? ACCENT_NAMES : colorTab == 1 ? BACKGROUND_NAMES : TEXT_COLOR_NAMES;
+        int[] colors = colorTab == 0 ? ACCENTS : colorTab == 1 ? BACKGROUNDS : colorTab == 2 ? TEXT_COLORS : ACCENTS;
+        String[] names = colorTab == 0 ? ACCENT_NAMES : colorTab == 1 ? BACKGROUND_NAMES : colorTab == 2 ? TEXT_COLOR_NAMES : ACCENT_NAMES;
         for (int i = 0; i < colors.length; i++) {
             final int chosen = colors[i];
             LinearLayout cell = Ui.vertical(activity);
@@ -406,7 +528,17 @@ public final class ThemeEditorDialog {
         int displayedText = colorTab == 2 ? chosen : currentColor(2);
         // The actual player darkens bright backgrounds to keep its light text readable.
         int readableBackground = Ui.effectiveBackground(displayedBackground);
-        preview.setBackground(Ui.outlined(readableBackground, 0xFF55606F, 19, activity));
+        if (colorTab == 3 || prefs.getBoolean("theme_gradient_enabled", false)) {
+            int start = prefs.getInt("theme_gradient_start", ThemeGradient.STARTS[0]);
+            int end = prefs.getInt("theme_gradient_end", ThemeGradient.ENDS[0]);
+            if (colorTab == 3) {
+                if (gradientSlot == 0) start = chosen;
+                else end = chosen;
+            }
+            preview.setBackground(ThemeGradient.create(activity, readableBackground, start, end,
+                    prefs.getInt("theme_gradient_angle", 315),
+                    prefs.getInt("theme_gradient_strength", 85), 19));
+        } else preview.setBackground(Ui.outlined(readableBackground, 0xFF55606F, 19, activity));
         previewChip.setBackground(Ui.shape(displayedAccent, 13, activity));
         previewChip.setTextColor(perceivedLuma(displayedAccent) > 135 ? 0xFF161B22 : Color.WHITE);
         previewTitle.setTextColor(displayedText);
@@ -416,6 +548,8 @@ public final class ThemeEditorDialog {
         if (pickerHint != null) {
             if (colorTab == 2 && contrastRatio(displayedText, readableBackground) < 4.5f) {
                 pickerHint.setText("Attention : ce texte risque d'être difficile à lire sur le fond choisi.");
+            } else if (colorTab == 3) {
+                pickerHint.setText("Choisis la nuance du premier ou du second côté du dégradé.");
             } else if (colorTab == 1 && readableBackground != displayedBackground) {
                 pickerHint.setText("Le fond choisi est légèrement assombri pour faciliter la lecture.");
             } else {
