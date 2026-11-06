@@ -1,3 +1,13 @@
+# Onde Player 3.8.3 — Lecture longue durée et diagnostic voiture
+
+- Le service de lecture reste au premier plan **entre deux titres**, pendant leur chargement asynchrone, et durant une perte temporaire du focus audio (GPS, téléphone). Le statut Android n'est plus retiré durant ces transitions.
+- La file de lecture et la position sont enregistrées : après une interruption du processus par Android, le service START_STICKY tente une restauration si la musique était en cours de lecture.
+- Verrou CPU de préparation audio à durée limitée (90 s maximum), libéré à la préparation, la pause, l'erreur et l'arrêt ; le MediaPlayer conserve son wake lock durant la lecture.
+- L'arrêt sur déconnexion Bluetooth reste volontaire afin d'éviter de diffuser la musique sur le haut-parleur du téléphone.
+- Nouvelle option « Diagnostic de lecture » pour comprendre localement un arrêt : fin de file, minuteur, focus audio, Bluetooth, erreur de média ou arrêt du service. Les informations sont partageables manuellement, sans nom de musique ni donnée personnelle.
+- Tests JVM supplémentaires de la politique de conservation du service et de reprise.
+- Version Android 3.8.3 (`versionCode 18`), même identité et signature, données utilisateurs inchangées.
+
 # Onde Player 3.8.2 — Color picker à deux curseurs et stabilité
 
 - Nouveau **DualColorPickerView** pour les trois dégradés (Accent, Fond, Texte) : deux repères 1 et 2 dans un seul carré saturation/luminosité et dans la barre des teintes.

@@ -73,6 +73,8 @@ public final class PlaybackService extends Service {
     private boolean isForeground = false;
     private boolean hasPublishedNotification = false;
     private boolean resumeAfterFocus = false;
+    private boolean restoringPlayback = false;
+    private PowerManager.WakeLock preparationWakeLock;
     private boolean playLogged = false;
     private long listeningStartedElapsed = 0L;
     private LibraryStore listeningStore;
@@ -130,6 +132,11 @@ public final class PlaybackService extends Service {
         playbackSpeed = prefs.getFloat("playback_speed", 1f);
         bassEnabled = prefs.getBoolean("bass_boost", false);
         audio = (AudioManager) getSystemService(AUDIO_SERVICE);
+        PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
+        if (power != null) {
+            preparationWakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Onde:MediaPreparation");
+            preparationWakeLock.setReferenceCounted(false);
+        }
         notifications = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         notifications.createNotificationChannel(new NotificationChannel(CHANNEL, "Lecture musicale", NotificationManager.IMPORTANCE_LOW));
         session = new MediaSession(this, "OndeSession");
@@ -145,7 +152,10 @@ public final class PlaybackService extends Service {
         session.setActive(true);
         becomingNoisy = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent i) {
-                if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) pause();
+                if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) {
+                    PlaybackDiagnostics.event(PlaybackService.this, "SORTIE_AUDIO_PERDUE", "Déconnexion casque / Bluetooth");
+                    pause();
+                }
             }
         };
         registerReceiver(becomingNoisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
@@ -157,6 +167,52 @@ public final class PlaybackService extends Service {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
+        if (intent == null) {
+            // START_STICKY allows a system-killed player to reconstruct its local
+            // queue and position. Do not restart a user-paused session.
+            if (!prefs.getBoolean("wants_playback", false)) {
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+            PlaybackDiagnostics.event(this, "REDEMARRAGE_SERVICE", "Tentative de reprise après interruption Android");
+            restoringPlayback = true;
+            try {
+                startForeground(NOTIFICATION_ID, notification());
+                isForeground = true;
+                hasPublishedNotification = true;
+            } catch (RuntimeException e) {
+                PlaybackDiagnostics.event(this, "PREMIER_PLAN_REFUSE", e.getClass().getSimpleName());
+            }
+            new Thread(() -> {
+                boolean loaded = MusicRepository.isLoaded();
+                try {
+                    if (!loaded) {
+                        MusicRepository.scan(getApplicationContext());
+                        loaded = MusicRepository.isLoaded();
+                    }
+                } catch (Exception e) {
+                    PlaybackDiagnostics.event(this, "REPRISE_IMPOSSIBLE", "Bibliothèque inaccessible");
+                }
+                final boolean ready = loaded;
+                main.post(() -> {
+                    if (ready) {
+                        restore();
+                        if (current != null) {
+                            resume();
+                            PlaybackDiagnostics.event(this, "REPRISE_SERVICE", "Reprise de la file enregistrée");
+                        }
+                    }
+                    restoringPlayback = false;
+                    if (current == null) {
+                        prefs.edit().putBoolean("wants_playback", false).apply();
+                        if (isForeground) { stopForeground(true); isForeground = false; }
+                        PlaybackDiagnostics.event(this, "REPRISE_IMPOSSIBLE", "Titre précédent indisponible");
+                        stopSelf();
+                    } else updateNotification();
+                });
+            }, "OndePlaybackRecovery").start();
+            return START_STICKY;
+        }
         if (current == null && (ACTION_PLAY_PAUSE.equals(action) || ACTION_NEXT.equals(action) || ACTION_PREVIOUS.equals(action))) {
             if (!MusicRepository.isLoaded()) {
                 new Thread(() -> {
@@ -168,7 +224,7 @@ public final class PlaybackService extends Service {
                         else if (ACTION_PREVIOUS.equals(action)) previous();
                     });
                 }, "OndeWidgetRestore").start();
-                return START_NOT_STICKY;
+                return START_STICKY;
             }
             restore();
         }
@@ -176,7 +232,9 @@ public final class PlaybackService extends Service {
         else if (ACTION_NEXT.equals(action)) next();
         else if (ACTION_PREVIOUS.equals(action)) previous();
         else if (ACTION_STOP.equals(action)) stopPlayback();
-        return START_NOT_STICKY;
+        // The app has been explicitly started by the user. Keep the service
+        // eligible for restart while there is active playback intent.
+        return START_STICKY;
     }
 
     public void listen(Runnable listener) { if (!listeners.contains(listener)) listeners.add(listener); }
@@ -448,6 +506,7 @@ public final class PlaybackService extends Service {
     private final Runnable sleepAction = () -> {
         if (sleepDeadlineElapsed > 0 && android.os.SystemClock.elapsedRealtime() >= sleepDeadlineElapsed) {
             sleepDeadlineElapsed = 0;
+            PlaybackDiagnostics.event(this, "MINUTEUR", "Minuteur de sommeil terminé");
             pause();
         }
     };
@@ -496,11 +555,15 @@ public final class PlaybackService extends Service {
             return;
         }
         if (playing) return;
-        if (!requestFocus()) return;
+        if (!requestFocus()) {
+            PlaybackDiagnostics.event(this, "PRIORITE_AUDIO_REFUSEE", "Autre application prioritaire");
+            return;
+        }
         try {
             player.start();
             playing = true;
             listeningStartedElapsed = SystemClock.elapsedRealtime();
+            PlaybackDiagnostics.event(this, "LECTURE", "Titre lancé ou repris");
             if (!playLogged) {
                 playLogged = true;
                 try { listeningStore.recordPlay(current.id); } catch (Exception ignored) {}
@@ -512,6 +575,7 @@ public final class PlaybackService extends Service {
 
     public void pause() { pauseInternal(true); }
     private void pauseInternal(boolean releaseFocus) {
+        releasePreparationWake();
         flushListening();
         listeningStartedElapsed = 0L;
         startOnReady = false;
@@ -519,7 +583,7 @@ public final class PlaybackService extends Service {
             try { if (player.isPlaying()) player.pause(); } catch (Exception ignored) {}
         }
         playing = false;
-        resumeAfterFocus = false;
+        if (releaseFocus) resumeAfterFocus = false;
         resumePosition = getPosition();
         if (releaseFocus) abandonFocus();
         syncSession(); updateNotification(); save(); changed();
@@ -567,6 +631,7 @@ public final class PlaybackService extends Service {
         } else {
             playing = false;
             startOnReady = false;
+            PlaybackDiagnostics.event(this, "FIN_FILE", "Dernier titre atteint (répétition désactivée)");
             if (player != null && prepared) {
                 try { player.pause(); player.seekTo(0); } catch (Exception ignored) {}
             }
@@ -713,6 +778,8 @@ public final class PlaybackService extends Service {
                 .putString("current_title", current == null ? "Votre musique, partout" : current.title)
                 .putString("current_artist", current == null ? "Onde Player" : current.artist)
                 .putLong("position", getPosition())
+                .putBoolean("wants_playback", PlaybackContinuityRules.wantsPlayback(
+                        playing, loading, startOnReady, resumeAfterFocus, restoringPlayback))
                 .apply();
     }
 
@@ -750,6 +817,10 @@ public final class PlaybackService extends Service {
         playing = false;
         startOnReady = autoStart;
         resumePosition = Math.max(0, position);
+        if (autoStart && preparationWakeLock != null) {
+            try { preparationWakeLock.acquire(90000L); } catch (RuntimeException ignored) {}
+        }
+        if (autoStart) PlaybackDiagnostics.event(this, "CHARGEMENT_TITRE", "Préparation audio, service maintenu");
         player.setAudioAttributes(new AudioAttributes.Builder()
                 .setContentType(track.isVideo ? AudioAttributes.CONTENT_TYPE_MOVIE : AudioAttributes.CONTENT_TYPE_MUSIC)
                 .setUsage(AudioAttributes.USAGE_MEDIA).build());
@@ -757,6 +828,7 @@ public final class PlaybackService extends Service {
         final MediaPlayer instance = player;
         player.setOnPreparedListener(mp -> {
             if (player != instance) return;
+            releasePreparationWake();
             prepared = true;
             if (track.isVideo) {
                 try { videoWidth = mp.getVideoWidth(); videoHeight = mp.getVideoHeight(); }
@@ -782,6 +854,7 @@ public final class PlaybackService extends Service {
         player.setOnCompletionListener(mp -> { if (player == instance) advance(true); });
         player.setOnErrorListener((mp, what, extra) -> {
             if (player == instance) {
+                PlaybackDiagnostics.event(this, "ERREUR_DECODAGE", what + "/" + extra);
                 reportVideoError(what, extra);
                 recoverError();
             }
@@ -794,16 +867,24 @@ public final class PlaybackService extends Service {
             updateNotification();
             changed();
         } catch (Exception e) {
+            PlaybackDiagnostics.event(this, "ERREUR_OUVERTURE", e.getClass().getSimpleName());
             if (track.isVideo) reportVideoError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
             recoverError();
         }
     }
+    private void releasePreparationWake() {
+        if (preparationWakeLock != null && preparationWakeLock.isHeld()) {
+            try { preparationWakeLock.release(); } catch (RuntimeException ignored) {}
+        }
+    }
     private void recoverError() {
+        releasePreparationWake();
         consecutiveErrors++;
         if (consecutiveErrors > Math.max(3, order.size() + pending.size() + 1)) {
             flushListening(); listeningStartedElapsed = 0L;
             loading = false; playing = false; startOnReady = false;
-            syncSession(); updateNotification(); changed();
+            PlaybackDiagnostics.event(this, "ERREURS_CONSECUTIVES", "Lecture interrompue après erreurs répétées");
+            syncSession(); updateNotification(); save(); changed();
             return;
         }
         main.post(() -> advance(false));
@@ -825,15 +906,23 @@ public final class PlaybackService extends Service {
     private void audioFocusChanged(int change) {
         main.post(() -> {
             if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                boolean shouldResume = playing;
-                pauseInternal(false);
+                // Keep the foreground service alive while GPS/phone calls take
+                // temporary focus. The previous implementation revoked foreground
+                // status BEFORE remembering that playback should resume.
+                boolean shouldResume = playing || (loading && startOnReady);
                 resumeAfterFocus = shouldResume;
+                PlaybackDiagnostics.event(this, "PRIORITE_AUDIO_TEMPORAIRE", "Pause en attente du retour audio");
+                pauseInternal(false);
             } else if (change == AudioManager.AUDIOFOCUS_LOSS) {
+                PlaybackDiagnostics.event(this, "PRIORITE_AUDIO_PERDUE", "Autre application audio prioritaire");
+                resumeAfterFocus = false;
                 pause();
             } else if (change == AudioManager.AUDIOFOCUS_GAIN && resumeAfterFocus) {
+                PlaybackDiagnostics.event(this, "PRIORITE_AUDIO_REVENUE", "Reprise automatique");
                 resumeAfterFocus = false;
                 resume();
             } else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK && player != null) {
+                PlaybackDiagnostics.event(this, "VOLUME_REDUIT", "GPS ou autre application audio");
                 try { player.setVolume(0.25f, 0.25f); } catch (Exception ignored) {}
             } else if (change == AudioManager.AUDIOFOCUS_GAIN && player != null) {
                 try { player.setVolume(1f, 1f); } catch (Exception ignored) {}
@@ -841,6 +930,8 @@ public final class PlaybackService extends Service {
         });
     }
     public void stopPlayback() {
+        PlaybackDiagnostics.event(this, "ARRET_MANUEL", "Action Arrêter");
+        releasePreparationWake();
         flushListening(); listeningStartedElapsed = 0L;
         playing = false; loading = false; prepared = false; startOnReady = false;
         if (player != null) { try { player.reset(); player.release(); } catch (Exception ignored) {} player = null; }
@@ -906,8 +997,12 @@ public final class PlaybackService extends Service {
     private void updateNotification() {
         if (current == null) return;
         Notification n = notification();
+        boolean keep = PlaybackContinuityRules.keepForeground(
+                playing, loading, startOnReady, resumeAfterFocus, restoringPlayback);
         try {
-            if (playing) {
+            if (keep) {
+                // In particular, do NOT demote the service while a new track is
+                // preparing or the car's audio focus is temporarily lost.
                 startForeground(NOTIFICATION_ID, n);
                 isForeground = true;
                 hasPublishedNotification = true;
@@ -917,12 +1012,14 @@ public final class PlaybackService extends Service {
                 notifications.notify(NOTIFICATION_ID, n);
                 hasPublishedNotification = true;
             } else if (hasPublishedNotification) notifications.notify(NOTIFICATION_ID, n);
-        } catch (RuntimeException ignored) {
-            // A restricted foreground-service launch must not crash local playback.
+        } catch (RuntimeException e) {
+            PlaybackDiagnostics.event(this, "SERVICE_NON_PROTEGE", e.getClass().getSimpleName());
         }
     }
 
     @Override public void onDestroy() {
+        PlaybackDiagnostics.event(this, "SERVICE_TERMINE", "Actif=" + playing + ", chargement=" + loading);
+        releasePreparationWake();
         flushListening(); listeningStartedElapsed = 0L;
         save();
         if (becomingNoisy != null) try { unregisterReceiver(becomingNoisy); } catch (Exception ignored) {}

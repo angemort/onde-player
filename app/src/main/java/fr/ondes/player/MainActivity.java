@@ -630,14 +630,32 @@ public final class MainActivity extends Activity {
         }));
         actions.add(new OptionSheet.Item("⏱", "Minuteur de sommeil", "Arrêter la musique après un délai", this::showSleepDialog));
         actions.add(new OptionSheet.Item("≋", "Égaliseur personnalisé", "Bandes réglables, préréglages, profils sauvegardés", this::showEqualizerDialog));
+        actions.add(new OptionSheet.Item("ⓘ", "Diagnostic de lecture", "Comprendre les pauses en voiture, le Bluetooth et les erreurs audio",
+                this::showPlaybackDiagnostics));
         actions.add(new OptionSheet.Item("✎", "Personnaliser l'apparence", "Accent, fond, couleur du texte et image personnelle", this::showThemeMenu));
         actions.add(new OptionSheet.Item("↻", "Mises à jour", "Version installée, état et recherche des nouvelles versions", this::showUpdateSettings));
         actions.add(new OptionSheet.Item("ⓘ", "Revoir le guide", "Gestes de lecture, sélection et file d'attente", this::startGuide));
-        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.8.2 · Média local et privé", () ->
-                new AlertDialog.Builder(this).setTitle("Onde Player 3.8.2")
+        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.8.3 · Média local et privé", () ->
+                new AlertDialog.Builder(this).setTitle("Onde Player 3.8.3")
                         .setMessage("Lecteur musical hors ligne. Aucun compte ni publicité.\n\nLes statistiques et les playlists restent sur cet appareil. Le temps d'écoute est mesuré à partir de la V3.")
                         .setPositiveButton("Fermer", null).show()));
         OptionSheet.show(this, "Votre bibliothèque", "Réglages et raccourcis", actions);
+    }
+
+    /** Human-readable, private playback events for support after a car journey. */
+    private void showPlaybackDiagnostics() {
+        String report = PlaybackDiagnostics.report(this);
+        new AlertDialog.Builder(this)
+                .setTitle("Diagnostic de lecture")
+                .setMessage(report)
+                .setPositiveButton("Fermer", null)
+                .setNeutralButton("Partager", (dialog, which) -> {
+                    Intent share = new Intent(Intent.ACTION_SEND);
+                    share.setType("text/plain");
+                    share.putExtra(Intent.EXTRA_TEXT, report);
+                    startActivity(Intent.createChooser(share, "Partager le diagnostic"));
+                })
+                .show();
     }
 
     /** Optional, free, HTTPS update feed (for example a raw file on GitHub).
