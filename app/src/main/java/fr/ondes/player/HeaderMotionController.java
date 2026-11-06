@@ -199,6 +199,24 @@ public final class HeaderMotionController {
         if (next != null && next != compact) request(next);
     }
 
+    /** Restore the right state after a live theme redraw, without animating. */
+    public void setImmediate(boolean targetCompact) {
+        if (disposed) return;
+        epoch++;
+        animating = false;
+        pendingCompact = null;
+        listFrame.animate().cancel();
+        listFrame.setTranslationY(0f);
+        for (View item : chrome) {
+            if (item == null) continue;
+            item.animate().cancel();
+            item.setAlpha(1f);
+            item.setTranslationY(0f);
+        }
+        compact = targetCompact;
+        delegate.applyImmediate(targetCompact);
+    }
+
     public void dispose() {
         disposed = true;
         epoch++;
