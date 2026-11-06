@@ -22,6 +22,13 @@ jobs:
         run: |
           SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Tests de stabilité du header (JVM)
+        run: |
+          mkdir -p /tmp/onde-header-tests
+          javac -encoding UTF-8 -d /tmp/onde-header-tests \
+            app/src/main/java/fr/ondes/player/HeaderScrollRules.java \
+            tests/HeaderScrollRulesTest.java
+          java -cp /tmp/onde-header-tests HeaderScrollRulesTest
       - name: Construire APK debug (validation uniquement)
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
