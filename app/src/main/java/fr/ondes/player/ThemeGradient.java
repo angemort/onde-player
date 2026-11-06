@@ -47,16 +47,12 @@ public final class ThemeGradient {
         drawable.setCornerRadius(Ui.dp(context, radiusDp));
         return drawable;
     }
+    /** Background mode honors the three roles and the older 3.7 settings. */
     public static void apply(Context context, android.view.View root) {
-        SharedPreferences preferences = context.getSharedPreferences("onde_settings", Context.MODE_PRIVATE);
-        if (!preferences.getBoolean("theme_gradient_enabled", false)) {
+        if ("gradient".equals(ThemeStyle.mode(context, "background"))) {
+            root.setBackground(ThemeStyle.surface(context, "background", 0));
+        } else {
             root.setBackgroundColor(Ui.BG);
-            return;
         }
-        root.setBackground(create(context, Ui.BG,
-                preferences.getInt("theme_gradient_start", STARTS[0]),
-                preferences.getInt("theme_gradient_end", ENDS[0]),
-                preferences.getInt("theme_gradient_angle", 7 * 45),
-                preferences.getInt("theme_gradient_strength", 85), 0));
     }
 }

@@ -5,6 +5,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.RippleDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.view.Gravity;
@@ -51,14 +52,19 @@ public final class Ui {
     public static int dp(Context context, float dp) {
         return (int) (context.getResources().getDisplayMetrics().density * dp + 0.5f);
     }
-    public static GradientDrawable shape(int color, float radius, Context c) {
+    public static Drawable shape(int color, float radius, Context c) {
+        // A theme accent paints buttons and indicators too, not just the preview.
+        if (color == ACCENT && !"solid".equals(ThemeStyle.mode(c, "accent")))
+            return ThemeStyle.surface(c, "accent", radius);
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
         d.setCornerRadius(dp(c, radius));
         return d;
     }
     public static GradientDrawable outlined(int color, int stroke, float radius, Context c) {
-        GradientDrawable d = shape(color, radius, c);
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(c, radius));
         d.setStroke(dp(c, 1), stroke);
         return d;
     }
@@ -96,6 +102,8 @@ public final class Ui {
         t.setGravity(Gravity.CENTER_VERTICAL);
         t.setIncludeFontPadding(false);
         if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        if (color == ACCENT) ThemeStyle.applyText(t, "accent");
+        else if (color == TEXT) ThemeStyle.applyText(t, "text");
         return t;
     }
     public static TextView icon(Context c, String glyph, int sizeDp, int fontSize, int textColor, int background) {
@@ -107,6 +115,8 @@ public final class Ui {
         t.setLayoutParams(new LinearLayout.LayoutParams(dp(c, sizeDp), dp(c, sizeDp)));
         clickable(t, shape(background, sizeDp / 2f, c));
         t.setContentDescription(glyph);
+        if (textColor == ACCENT) ThemeStyle.applyText(t, "accent");
+        else if (textColor == TEXT) ThemeStyle.applyText(t, "text");
         return t;
     }
     public static LinearLayout.LayoutParams lp(Context c, int width, int height) {
