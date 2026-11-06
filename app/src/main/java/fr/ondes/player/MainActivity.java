@@ -111,6 +111,7 @@ public final class MainActivity extends Activity {
     private ThemeEditorDialog themeEditor;
     private FrameLayout content;
     private LinearLayout topTabs;
+    private View tabHeader;
     private LinearLayout mini;
     private FrameLayout fullOverlay;
     private EditText search;
@@ -396,6 +397,7 @@ public final class MainActivity extends Activity {
         topTabs.setPadding(d(20), 0, d(20), d(12));
         horizontal.addView(topTabs);
         shell.addView(horizontal);
+        tabHeader = horizontal;
         rebuildTabs();
 
         content = new FrameLayout(this);
@@ -1169,21 +1171,26 @@ public final class MainActivity extends Activity {
         } else if (screen.equals("Écoutés")) drawHistory();
         else drawQueue();
     }
-    /** Free vertical space while selecting tracks without hiding the search or tab navigation. */
+    /** Selection stays compact; the list's own scroll can also hide the chrome. */
     private void setSelectionHeaderCompact(boolean active) {
-        if (brandHeader != null) brandHeader.setVisibility(active ? View.GONE : View.VISIBLE);
+        if (brandHeader != null) brandHeader.setVisibility(active || headerScrolled ? View.GONE : View.VISIBLE);
+        if (tabHeader != null) tabHeader.setVisibility(headerScrolled ? View.GONE : View.VISIBLE);
         if (headerSubtitle != null) headerSubtitle.setVisibility(View.GONE);
     }
 
-    /** Never resize the list's viewport from onScroll: that caused first-item jitter. */
+    /** A single, decisive collapse rather than an opacity-only preview.
+     * Re-expansion happens only at rest AND at the real top: while a finger
+     * stays on screen this method never oscillates between two viewport sizes. */
     private void setScrolledHeader(boolean compact) {
         if (!screen.equals("Titres")) compact = false;
         headerScrolled = compact;
         headerPreviewDimmed = false;
+        if (brandHeader != null) brandHeader.setVisibility(compact ? View.GONE : View.VISIBLE);
+        if (tabHeader != null) tabHeader.setVisibility(compact ? View.GONE : View.VISIBLE);
         if (brandTitleStack != null) {
             brandTitleStack.animate().cancel();
             brandTitleStack.setAlpha(1f);
-            brandTitleStack.setVisibility(compact ? View.GONE : View.VISIBLE);
+            brandTitleStack.setVisibility(View.VISIBLE);
         }
         for (View v : new View[]{pageHeading, pageTypes, pageToolbar, pageHint}) {
             if (v == null) continue;
@@ -1191,16 +1198,6 @@ public final class MainActivity extends Activity {
             v.setAlpha(1f);
             v.setVisibility(compact ? View.GONE : View.VISIBLE);
         }
-    }
-
-    /** Fade secondary tools as the finger scrolls; preserve layout until scrolling stops. */
-    private void previewScrolledHeader(boolean compact) {
-        if (headerScrolled || headerPreviewDimmed == compact) return;
-        headerPreviewDimmed = compact;
-        float opacity = compact ? .32f : 1f;
-        for (View v : new View[]{brandTitleStack, pageHeading, pageTypes, pageToolbar, pageHint})
-            if (v != null && v.getVisibility() == View.VISIBLE)
-                v.animate().alpha(opacity).setDuration(150).start();
     }
 
     /** Search is self-contained: results, clearing and playback live in the same window.
@@ -1530,27 +1527,35 @@ public final class MainActivity extends Activity {
                 });
             }
             final int[] listScrollState = {android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE};
+            final boolean[] collapseQueued = {false};
             list.setOnScrollListener(new android.widget.AbsListView.OnScrollListener() {
                 @Override public void onScrollStateChanged(android.widget.AbsListView view, int state) {
                     listScrollState[0] = state;
                     if (state != SCROLL_STATE_IDLE || activeTrackList != list) return;
-                    // Debounced: one height change after release/fling, never under the finger.
+                    // Never expand under a held finger or during a fling.
                     list.postDelayed(() -> {
                         if (activeTrackList != list || !screen.equals("Titres")
                                 || listScrollState[0] != SCROLL_STATE_IDLE) return;
                         int first = list.getFirstVisiblePosition();
                         int top = list.getChildCount() == 0 ? 0 : list.getChildAt(0).getTop();
-                        boolean shouldCompact = HeaderScrollRules.shouldCompact(
-                                headerScrolled, first, top, d(4), d(36));
-                        if (shouldCompact != headerScrolled) setScrolledHeader(shouldCompact);
-                        else if (!headerScrolled) previewScrolledHeader(false);
-                    }, 75);
+                        if (headerScrolled && !HeaderScrollRules.shouldCompact(true, first, top, d(5), d(36)))
+                            setScrolledHeader(false);
+                    }, 120);
                 }
                 @Override public void onScroll(android.widget.AbsListView view, int first, int visible, int total) {
-                    if (view == null || !hasScanned) return;
-                    // Hysteresis avoids flickering around the first row.
-                    if (!headerScrolled) previewScrolledHeader(first > 1);
-                    if (az != null && first >= 0 && first < tracks.size()) az.highlight(AlphabetRules.group(tracks.get(first).title));
+                    if (view == null || !hasScanned || activeTrackList != list) return;
+                    // Hide the entire upper chrome once, even while dragging. We do NOT
+                    // restore it in onScroll (which previously caused viewport jitter).
+                    if (!headerScrolled && !collapseQueued[0] && first >= 3) {
+                        collapseQueued[0] = true;
+                        list.post(() -> {
+                            collapseQueued[0] = false;
+                            if (activeTrackList == list && screen.equals("Titres") && !headerScrolled
+                                    && list.getFirstVisiblePosition() >= 2) setScrolledHeader(true);
+                        });
+                    }
+                    if (az != null && first >= 0 && first < tracks.size())
+                        az.highlight(AlphabetRules.group(tracks.get(first).title));
                 }
             });
             if (az != null) {
