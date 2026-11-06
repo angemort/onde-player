@@ -409,7 +409,7 @@ public final class MainActivity extends Activity {
         mini = Ui.horizontal(this);
         mini.setGravity(Gravity.CENTER_VERTICAL);
         mini.setPadding(d(10), d(8), d(8), d(8));
-        Ui.clickable(mini, Ui.gradient(0xFF2D352D, 0xFF222936, 17, this));
+        Ui.clickable(mini, Ui.gradient(Ui.ACCENT_SECONDARY, Ui.SURFACE_ALT, 17, this));
         miniCover = cover(47, 11);
         mini.addView(miniCover, Ui.lp(this, 47, 47));
         LinearLayout miniText = Ui.vertical(this);
@@ -424,7 +424,7 @@ public final class MainActivity extends Activity {
         miniText.addView(Ui.gap(this, 4));
         miniText.addView(miniArtist);
         mini.addView(miniText, new LinearLayout.LayoutParams(0, -2, 1f));
-        miniPause = Ui.icon(this, "▶", 38, 20, Ui.BG, Ui.ACCENT);
+        miniPause = Ui.icon(this, "▶", 38, 20, Ui.ON_ACCENT, Ui.ACCENT);
         miniPause.setOnClickListener(v -> { if (service != null) service.toggle(); });
         LinearLayout.LayoutParams miniPlayP = Ui.lp(this, 38, 38);
         miniPlayP.rightMargin = d(8);
@@ -439,7 +439,7 @@ public final class MainActivity extends Activity {
         miniCard = new FrameLayout(this);
         miniCard.addView(mini, new FrameLayout.LayoutParams(-1, -1));
         View rail = new View(this);
-        rail.setBackgroundColor(0xFF394A3C);
+        rail.setBackgroundColor(Ui.ACCENT_OUTLINE);
         miniCard.addView(rail, new FrameLayout.LayoutParams(-1, d(3), Gravity.BOTTOM));
         miniProgress = new View(this);
         miniProgress.setBackground(Ui.shape(Ui.ACCENT, 3, this));
@@ -459,7 +459,7 @@ public final class MainActivity extends Activity {
     /** In-app floating sleep timer, above both the library and fullscreen video. */
     private void buildSleepBubble() {
         sleepBubble = new FrameLayout(this);
-        sleepBubble.setBackground(Ui.gradient(0xF72D4035, 0xF020302A, 22, this));
+        sleepBubble.setBackground(Ui.gradient(Ui.ACCENT_SECONDARY, Ui.SURFACE_ALT, 22, this));
         sleepBubble.setElevation(d(15));
         sleepBubble.setPadding(d(13), d(8), d(13), d(8));
         sleepBubbleText = Ui.text(this, "◷  00:00", 14, Ui.TEXT, true);
@@ -554,7 +554,7 @@ public final class MainActivity extends Activity {
     private int d(float n) { return Ui.dp(this, n); }
     private ImageView cover(int size, int radius) {
         ImageView image = new ImageView(this);
-        image.setBackground(Ui.gradient(0xFF344550, 0xFF353147, radius, this));
+        image.setBackground(Ui.gradient(Ui.SURFACE_ALT, Ui.SURFACE, radius, this));
         image.setClipToOutline(true);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         return image;
@@ -571,7 +571,7 @@ public final class MainActivity extends Activity {
         LinearLayout chip = Ui.horizontal(this);
         chip.setGravity(Gravity.CENTER_VERTICAL);
         chip.setPadding(d(10), d(8), d(12), d(8));
-        Ui.clickable(chip, Ui.shape(accent ? 0xFF30483B : Ui.SURFACE, 12, this));
+        Ui.clickable(chip, Ui.shape(accent ? Ui.ACCENT_SECONDARY : Ui.SURFACE, 12, this));
         TextView picture = Ui.icon(this, glyph, 24, 18, accent ? Ui.ACCENT : Ui.TEXT, Color.TRANSPARENT);
         picture.setClickable(false);
         chip.addView(picture, Ui.lp(this, 24, 24));
@@ -586,10 +586,10 @@ public final class MainActivity extends Activity {
         topTabs.removeAllViews();
         for (String name : SCREENS) {
             boolean selected = name.equals(screen);
-            TextView chip = Ui.text(this, name, 13, selected ? Ui.BG : Ui.MUTED, selected);
+            TextView chip = Ui.text(this, name, 13, selected ? Ui.ON_ACCENT : Ui.MUTED, selected);
             chip.setGravity(Gravity.CENTER);
             chip.setPadding(d(16), d(12), d(16), d(12));
-            Ui.clickable(chip, Ui.shape(selected ? Ui.ACCENT : Ui.SURFACE, 22, this));
+            Ui.clickable(chip, Ui.shape(selected ? Ui.ACCENT : Ui.SURFACE, 22, this), selected);
             LinearLayout.LayoutParams p = Ui.lp(this, -2, -2);
             p.rightMargin = d(7);
             topTabs.addView(chip, p);
@@ -827,7 +827,7 @@ public final class MainActivity extends Activity {
         };
         LinearLayout panel = Ui.vertical(this);
         panel.setPadding(d(19), d(17), d(19), d(18));
-        panel.setBackground(Ui.gradient(0xFF2B343F, 0xFF17201F, 19, this));
+        panel.setBackground(Ui.gradient(Ui.SURFACE_ALT, Ui.BG, 19, this));
         panel.addView(Ui.text(this, "DÉCOUVRIR ONDE  ·  " + (step + 1) + "/4", 11, Ui.ACCENT, true));
         panel.addView(Ui.gap(this, 10));
         panel.addView(Ui.text(this, titles[step], 20, Ui.TEXT, true));
@@ -842,7 +842,7 @@ public final class MainActivity extends Activity {
         skip.setOnClickListener(v -> dismissGuide(true));
         View space = new View(this);
         controls.addView(space, new LinearLayout.LayoutParams(0, 1, 1f));
-        TextView next = textButton(step == 3 ? "C'est parti  ✓" : "Suivant  ›", Ui.BG);
+        TextView next = textButton(step == 3 ? "C'est parti  ✓" : "Suivant  ›", Ui.ON_ACCENT);
         next.setBackground(Ui.shape(Ui.ACCENT, 12, this));
         controls.addView(next, Ui.lp(this, -2, 43));
         next.setOnClickListener(v -> showGuideStep(step + 1));
@@ -1218,7 +1218,7 @@ public final class MainActivity extends Activity {
         container.setPadding(d(18), d(5), d(18), d(8));
         LinearLayout queryRow = Ui.horizontal(this);
         queryRow.setPadding(d(12), d(4), d(7), d(4));
-        queryRow.setBackground(Ui.outlined(Ui.SURFACE_ALT, 0xFF4C5966, 15, this));
+        queryRow.setBackground(Ui.outlined(Ui.SURFACE_ALT, Ui.OUTLINE, 15, this));
         TextView lens = Ui.text(this, "⌕", 25, Ui.ACCENT, true);
         lens.setGravity(Gravity.CENTER);
         queryRow.addView(lens, Ui.lp(this, 30, 43));
@@ -1482,7 +1482,7 @@ public final class MainActivity extends Activity {
             String[] labels = {"Tout", "Musique", "Vidéos"};
             for (int i = 0; i < labels.length; i++) {
                 final int f = i;
-                TextView chip = Ui.text(this, labels[i], 12, f == mediaFilter ? Ui.BG : Ui.MUTED, true);
+                TextView chip = Ui.text(this, labels[i], 12, f == mediaFilter ? Ui.ON_ACCENT : Ui.MUTED, true);
                 chip.setGravity(Gravity.CENTER);
                 chip.setPadding(d(13), d(9), d(13), d(9));
                 chip.setBackground(Ui.shape(f == mediaFilter ? Ui.ACCENT : Ui.SURFACE, 15, this));
@@ -1630,7 +1630,7 @@ public final class MainActivity extends Activity {
     private LinearLayout statTile(String label, String number, String helper, int tint) {
         LinearLayout tile = Ui.vertical(this);
         tile.setPadding(d(14), d(15), d(8), d(13));
-        tile.setBackground(Ui.gradient(0xFF2B333F, 0xFF1B2430, 16, this));
+        tile.setBackground(Ui.gradient(Ui.SURFACE_ALT, Ui.SURFACE, 16, this));
         tile.addView(Ui.text(this, label.toUpperCase(Locale.FRANCE), 10, Ui.MUTED, true));
         tile.addView(Ui.gap(this, 10));
         TextView value = Ui.text(this, number, 23, tint, true);
@@ -1655,8 +1655,8 @@ public final class MainActivity extends Activity {
     private void addAchievement(LinearLayout parent, String icon, String name, String condition, boolean unlocked) {
         LinearLayout item = Ui.vertical(this);
         item.setPadding(d(11), d(12), d(11), d(12));
-        item.setBackground(Ui.outlined(unlocked ? 0xFF304536 : 0xFF222631,
-                unlocked ? 0xFF658F50 : 0xFF363D48, 14, this));
+        item.setBackground(Ui.outlined(unlocked ? Ui.SELECTION : Ui.SURFACE,
+                unlocked ? Ui.ACCENT_OUTLINE : Ui.OUTLINE, 14, this));
         TextView symbol = Ui.text(this, icon, 24, unlocked ? Ui.ACCENT : Ui.MUTED, true);
         item.addView(symbol);
         item.addView(Ui.gap(this, 7));
@@ -1677,7 +1677,7 @@ public final class MainActivity extends Activity {
         dashboard.setPadding(d(18), d(9), d(18), d(13));
         LinearLayout hero = Ui.vertical(this);
         hero.setPadding(d(19), d(19), d(19), d(17));
-        hero.setBackground(Ui.gradient(0xFF384936, 0xFF252E40, 20, this));
+        hero.setBackground(Ui.gradient(Ui.ACCENT_SECONDARY, Ui.SURFACE_ALT, 20, this));
         hero.addView(Ui.text(this, "VOTRE UNIVERS MUSICAL", 10, Ui.ACCENT, true));
         hero.addView(Ui.gap(this, 7));
         int xp = (int) Math.min(Integer.MAX_VALUE, stats.plays * 5 + stats.listenedMs / 60000L * 2);
@@ -1686,14 +1686,14 @@ public final class MainActivity extends Activity {
         long ceiling = 100L * level * (level+1) / 2;
         hero.addView(Ui.text(this, "Niveau " + level + "  ·  " + xp + " XP", 25, Ui.TEXT, true));
         hero.addView(Ui.gap(this, 6));
-        hero.addView(Ui.text(this, (ceiling - xp) + " XP avant le prochain niveau", 12, 0xFFDAE8D7, false));
+        hero.addView(Ui.text(this, (ceiling - xp) + " XP avant le prochain niveau", 12, Ui.MUTED, false));
         hero.addView(Ui.gap(this, 15));
         android.widget.ProgressBar levelBar = new android.widget.ProgressBar(this, null,
                 android.R.attr.progressBarStyleHorizontal);
         levelBar.setMax(1000);
         levelBar.setProgress((int)Math.max(0, Math.min(1000, 1000L * (xp - floor) / Math.max(1, ceiling - floor))));
         levelBar.setProgressTintList(ColorStateList.valueOf(Ui.ACCENT));
-        levelBar.setProgressBackgroundTintList(ColorStateList.valueOf(0xFF637468));
+        levelBar.setProgressBackgroundTintList(ColorStateList.valueOf(Ui.ACCENT_SUBTLE));
         hero.addView(levelBar, Ui.lp(this, -1, 7));
         dashboard.addView(hero, Ui.lp(this, -1, -2));
         dashboard.addView(Ui.gap(this, 14));
@@ -1705,7 +1705,7 @@ public final class MainActivity extends Activity {
                 statTile("Série active", stats.streakDays + " jours", "Jours consécutifs", Ui.PURPLE));
         LinearLayout challenge = Ui.vertical(this);
         challenge.setPadding(d(16), d(14), d(16), d(14));
-        challenge.setBackground(Ui.outlined(Ui.SURFACE, 0xFF475E4A, 16, this));
+        challenge.setBackground(Ui.outlined(Ui.SURFACE, Ui.ACCENT_OUTLINE, 16, this));
         challenge.addView(Ui.text(this, "DÉFI DU JOUR  ·  30 MINUTES", 11, Ui.ACCENT, true));
         challenge.addView(Ui.gap(this, 6));
         long dailyMinutes = stats.todayMs / 60000L;
@@ -1716,7 +1716,7 @@ public final class MainActivity extends Activity {
         goal.setMax(1000);
         goal.setProgress((int) Math.min(1000L, stats.todayMs * 1000L / (30L * 60000L)));
         goal.setProgressTintList(ColorStateList.valueOf(Ui.ACCENT));
-        goal.setProgressBackgroundTintList(ColorStateList.valueOf(0xFF3D4654));
+        goal.setProgressBackgroundTintList(ColorStateList.valueOf(Ui.OUTLINE));
         challenge.addView(goal, Ui.lp(this, -1, 6));
         LinearLayout.LayoutParams cp = Ui.lp(this, -1, -2);
         cp.bottomMargin = d(13);
@@ -1766,7 +1766,7 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < 2; i++) {
             final boolean top = i == 1;
             TextView tab = textButton(top ? "Les plus écoutés" : "Écoutes récentes", topHistory == top ? Ui.ACCENT : Ui.MUTED);
-            tab.setBackground(Ui.shape(topHistory == top ? 0xFF2B3C30 : Ui.SURFACE, 13, this));
+            tab.setBackground(Ui.shape(topHistory == top ? Ui.SELECTION : Ui.SURFACE, 13, this));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, d(43), 1f);
             if (i == 1) lp.leftMargin = d(8);
             modes.addView(tab, lp);
@@ -1831,7 +1831,7 @@ public final class MainActivity extends Activity {
             this.tracks = tracks;
             this.adapter = adapter;
             bar = Ui.vertical(MainActivity.this);
-            bar.setBackground(Ui.gradient(0xFF1E302C, 0xFF1A242E, 15, MainActivity.this));
+            bar.setBackground(Ui.gradient(Ui.ACCENT_SECONDARY, Ui.SURFACE, 15, MainActivity.this));
             bar.setPadding(d(12), d(11), d(12), d(11));
             LinearLayout top = Ui.horizontal(MainActivity.this);
             TextView icon = Ui.icon(MainActivity.this, "✓", 30, 20, Ui.ACCENT, Color.TRANSPARENT);
@@ -2093,7 +2093,7 @@ public final class MainActivity extends Activity {
                 TextView avatar = Ui.text(MainActivity.this, name.isEmpty() ? "♪" : name.substring(0, 1).toUpperCase(Locale.ROOT),
                         22, Ui.ACCENT, true);
                 avatar.setGravity(Gravity.CENTER);
-                avatar.setBackground(Ui.gradient(0xFF383448, 0xFF293D3C, 30, MainActivity.this));
+                avatar.setBackground(Ui.gradient(Ui.SURFACE_ALT, Ui.ACCENT_SECONDARY, 30, MainActivity.this));
                 row.addView(avatar, Ui.lp(MainActivity.this, 55, 55));
                 LinearLayout info = Ui.vertical(MainActivity.this);
                 info.setPadding(d(15), 0, 0, 0);
@@ -2171,8 +2171,8 @@ public final class MainActivity extends Activity {
                 TextView emblem = Ui.text(MainActivity.this, favorite ? "♥" : "♫", 27,
                         favorite ? Ui.BG : Ui.PURPLE, true);
                 emblem.setGravity(Gravity.CENTER);
-                emblem.setBackground(Ui.gradient(favorite ? Ui.ACCENT : 0xFF323150,
-                        favorite ? 0xFF91CF56 : 0xFF303C4D, 13, MainActivity.this));
+                emblem.setBackground(Ui.gradient(favorite ? Ui.ACCENT : Ui.SECONDARY,
+                        favorite ? Ui.ACCENT_HOVER : Ui.SURFACE_ALT, 13, MainActivity.this));
                 row.addView(emblem, Ui.lp(MainActivity.this, 63, 63));
                 LinearLayout names = Ui.vertical(MainActivity.this);
                 names.setPadding(d(15), 0, 0, 0);
@@ -2516,7 +2516,7 @@ public final class MainActivity extends Activity {
         create.setPadding(0, d(16), 0, d(16));
         sheet.addView(create);
         create.setOnClickListener(v -> { dialog.dismiss(); askCreatePlaylist(track); });
-        TextView done = Ui.text(this, "Terminé", 14, Ui.BG, true);
+        TextView done = Ui.text(this, "Terminé", 14, Ui.ON_ACCENT, true);
         done.setGravity(Gravity.CENTER);
         done.setBackground(Ui.shape(Ui.ACCENT, 14, this));
         sheet.addView(done, Ui.lp(this, -1, 46));
@@ -2912,7 +2912,7 @@ public final class MainActivity extends Activity {
         inner.addView(Ui.gap(this, 12));
 
         artworkFrame = new FrameLayout(this);
-        artworkFrame.setBackground(Ui.gradient(0xFF2B3946, 0xFF4A344D, 26, this));
+        artworkFrame.setBackground(Ui.gradient(Ui.SURFACE_ALT, Ui.SURFACE, 26, this));
         artworkFrame.setClipToOutline(true);
         fullCover = cover(280, 26);
         artworkFrame.addView(fullCover, new FrameLayout.LayoutParams(-1, -1));
@@ -2949,7 +2949,7 @@ public final class MainActivity extends Activity {
         progress.setMax(1000);
         progress.setProgressTintList(ColorStateList.valueOf(Ui.ACCENT));
         progress.setThumbTintList(ColorStateList.valueOf(Ui.ACCENT));
-        progress.setProgressBackgroundTintList(ColorStateList.valueOf(0xFF3F4650));
+        progress.setProgressBackgroundTintList(ColorStateList.valueOf(Ui.OUTLINE));
         progress.setPadding(0, d(5), 0, d(5));
         progress.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onStartTrackingTouch(SeekBar bar) { userSeeking = true; }
@@ -2984,7 +2984,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams prevP = new LinearLayout.LayoutParams(0, d(52), 1f);
         prevP.rightMargin = d(4);
         controls.addView(prev, prevP);
-        fullPause = Ui.icon(this, "▶", 72, 36, Ui.BG, Ui.ACCENT);
+        fullPause = Ui.icon(this, "▶", 72, 36, Ui.ON_ACCENT, Ui.ACCENT);
         fullPause.setContentDescription("Lire ou mettre en pause");
         fullPause.setOnClickListener(v -> { if (service != null) service.toggle(); });
         LinearLayout.LayoutParams playP = Ui.lp(this, 72, 72);
@@ -3049,7 +3049,7 @@ public final class MainActivity extends Activity {
     }
 
     private TextView videoControl(String glyph, String description) {
-        TextView button = Ui.icon(this, glyph, 45, 23, Ui.TEXT, 0xCC253137);
+        TextView button = Ui.icon(this, glyph, 45, 23, Ui.TEXT, Ui.SURFACE_ALT);
         button.setContentDescription(description);
         return button;
     }
@@ -3101,7 +3101,7 @@ public final class MainActivity extends Activity {
         videoMessage = Ui.text(this, "Préparation de l'image…", 13, Ui.TEXT, true);
         videoMessage.setGravity(Gravity.CENTER);
         videoMessage.setPadding(d(18), d(12), d(18), d(12));
-        videoMessage.setBackground(Ui.shape(0xCC15202B, 14, this));
+        videoMessage.setBackground(Ui.shape(Ui.SURFACE, 14, this));
         FrameLayout.LayoutParams msg = new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER);
         msg.setMargins(d(20), 0, d(20), 0);
         videoPane.addView(videoMessage, msg);
@@ -3167,7 +3167,7 @@ public final class MainActivity extends Activity {
         LinearLayout playerRow = Ui.horizontal(this);
         playerRow.setPadding(d(20), d(15), d(20), d(15));
         playerRow.setGravity(Gravity.CENTER_VERTICAL);
-        playerRow.setBackground(Ui.gradient(0xEE18232D, 0xCC10191E, 14, this));
+        playerRow.setBackground(Ui.gradient(Ui.SURFACE_ALT, Ui.BG, 14, this));
         TextView prev = videoControl("⏮", "Précédent");
         prev.setOnClickListener(v -> { if (service != null) service.previous(); });
         playerRow.addView(prev);
@@ -3392,7 +3392,7 @@ public final class MainActivity extends Activity {
         }
         if (!(miniCover.getTag() instanceof Long) || (Long) miniCover.getTag() != track.id) Artwork.bind(this, miniCover, track);
         if (!(fullCover.getTag() instanceof Long) || (Long) fullCover.getTag() != track.id) {
-            fullOverlay.setBackground(Ui.gradient(0xFF202D33, Ui.BG, 0, this));
+            fullOverlay.setBackground(Ui.gradient(Ui.SURFACE_ALT, Ui.BG, 0, this));
             Artwork.bind(this, fullCover, track, bitmap -> {
                 if (service == null || service.getCurrent() == null || service.getCurrent().id != track.id) return;
                 int sample = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() / 3);
@@ -3406,7 +3406,7 @@ public final class MainActivity extends Activity {
         miniPause.setText(isPlaying ? "Ⅱ" : "▶");
         fullPause.setText(isPlaying ? "Ⅱ" : "▶");
         shuffleButton.setTextColor(service.isShuffle() ? Ui.ACCENT : Ui.MUTED);
-        shuffleButton.setBackground(Ui.shape(service.isShuffle() ? 0xFF293E2A : Color.TRANSPARENT, 24, this));
+        shuffleButton.setBackground(Ui.shape(service.isShuffle() ? Ui.SELECTION : Color.TRANSPARENT, 24, this));
         int repeatMode = service.getRepeat();
         repeatButton.setText(repeatMode == 2 ? "↻₁" : "↻");
         repeatButton.setTextColor(repeatMode > 0 ? Ui.ACCENT : Ui.MUTED);

@@ -40,15 +40,15 @@ public final class SwipeTrackRow extends FrameLayout {
         setBackground(Ui.shape(Ui.BG, 14, context));
 
         FrameLayout underlay = new FrameLayout(context);
-        underlay.setBackground(Ui.shape(0xFF202A35, 13, context));
+        underlay.setBackground(Ui.shape(Ui.SURFACE_ALT, 13, context));
         addView(underlay, new FrameLayout.LayoutParams(-1, -1));
 
-        nextAction = action(context, "⏭", "LIRE ENSUITE", 0xFF163F31);
+        nextAction = action(context, "⏭", "LIRE ENSUITE", Ui.ACCENT_SECONDARY);
         nextDescription = (TextView) nextAction.getChildAt(1);
         FrameLayout.LayoutParams lpNext = new FrameLayout.LayoutParams(-2, -1, Gravity.START);
         underlay.addView(nextAction, lpNext);
 
-        queueAction = action(context, "☷", "AJOUTER À LA FILE", 0xFF283A5A);
+        queueAction = action(context, "☷", "AJOUTER À LA FILE", Ui.SELECTION);
         queueDescription = (TextView) queueAction.getChildAt(1);
         FrameLayout.LayoutParams lpQueue = new FrameLayout.LayoutParams(-2, -1, Gravity.END);
         underlay.addView(queueAction, lpQueue);
@@ -84,7 +84,7 @@ public final class SwipeTrackRow extends FrameLayout {
         onQueue = enqueue;
     }
     public void setSelectionVisual(boolean selected) {
-        front.setBackground(Ui.shape(selected ? 0xFF283F37 : Ui.SURFACE, 13, getContext()));
+        front.setBackground(Ui.shape(selected ? Ui.SELECTION : Ui.SURFACE, 13, getContext()));
     }
     public void setSwipeEnabled(boolean enabled) { swipeEnabled = enabled; }
     public void resetPosition() {

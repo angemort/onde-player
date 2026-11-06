@@ -45,7 +45,7 @@ public final class ListeningWeekView extends View {
 
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(d(1));
-        paint.setColor(0x244E5961);
+        paint.setColor(Ui.DIVIDER);
         for (int i = 0; i < 3; i++) {
             float y = top + available * i / 2f;
             canvas.drawLine(d(5), y, w - d(5), y, paint);
@@ -59,7 +59,7 @@ public final class ListeningWeekView extends View {
             float cx = step * (i + .5f);
             float bw = Math.min(d(25), step * .48f);
             float h = data.listenedMs == 0 ? d(3) : Math.max(d(7), (float) data.listenedMs / max * available);
-            paint.setColor(data.listenedMs > 0 ? (i == 6 ? Ui.ACCENT : 0xFF8EA5DF) : 0xFF343A46);
+            paint.setColor(data.listenedMs > 0 ? (i == 6 ? Ui.ACCENT : Ui.SECONDARY) : Ui.SURFACE_ALT);
             canvas.drawRoundRect(new RectF(cx - bw/2f, bottom - h, cx + bw/2f, bottom), d(6), d(6), paint);
             paint.setColor(i == 6 ? Ui.ACCENT : Ui.MUTED);
             paint.setTextAlign(Paint.Align.CENTER);

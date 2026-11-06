@@ -43,7 +43,7 @@ public final class OptionSheet {
         DragSheet sheet = new DragSheet(activity, dialog);
         sheet.setOrientation(LinearLayout.VERTICAL);
         sheet.setPadding(d(activity, 20), d(activity, 7), d(activity, 20), d(activity, 19));
-        sheet.setBackground(Ui.gradient(0xFF262D3A, 0xFF151922, 28, activity));
+        sheet.setBackground(Ui.gradient(Ui.SURFACE_ALT, Ui.BG, 28, activity));
 
         // A generous grip hit area; also works as an expand/collapse button.
         LinearLayout grip = Ui.vertical(activity);
@@ -53,7 +53,7 @@ public final class OptionSheet {
         grip.setFocusable(true);
         grip.setPadding(0, d(activity, 9), 0, d(activity, 12));
         View handle = new View(activity);
-        handle.setBackground(Ui.shape(0xFF778493, 4, activity));
+        handle.setBackground(Ui.shape(Ui.OUTLINE, 4, activity));
         grip.addView(handle, Ui.lp(activity, 45, 4));
         sheet.addView(grip, Ui.lp(activity, -1, 29));
 
@@ -90,9 +90,9 @@ public final class OptionSheet {
             LinearLayout row = Ui.horizontal(activity);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(d(activity, 12), d(activity, 12), d(activity, 12), d(activity, 12));
-            Ui.clickable(row, Ui.shape(0xFF222A35, 15, activity));
+            Ui.clickable(row, Ui.shape(Ui.SURFACE_ALT, 15, activity));
             TextView icon = Ui.icon(activity, item.icon, 43, 22,
-                    item.danger ? 0xFFFFA3A6 : Ui.ACCENT, item.danger ? 0xFF4A2B32 : 0xFF334338);
+                    item.danger ? 0xFFFFA3A6 : Ui.ACCENT, item.danger ? 0xFF4A2B32 : Ui.ACCENT_SECONDARY);
             row.addView(icon, Ui.lp(activity, 43, 43));
             icon.setClickable(false);
             LinearLayout texts = Ui.vertical(activity);
@@ -137,7 +137,7 @@ public final class OptionSheet {
             window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
             window.setDimAmount(.66f);
             window.setGravity(Gravity.BOTTOM);
-            window.setNavigationBarColor(0xFF151922);
+            window.setNavigationBarColor(Ui.BG);
         }
         dialog.show();
         if (window != null) window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
