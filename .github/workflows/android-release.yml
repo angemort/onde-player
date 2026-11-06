@@ -39,7 +39,8 @@ jobs:
           gradle-version: '8.2.1'
       - name: Installer le SDK Android
         run: |
-          sdkmanager --install 'platforms;android-34' 'build-tools;34.0.0'
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-34' 'build-tools;34.0.0'
       - name: Préparer la clé et vérifier la version
         env:
           KEYSTORE_B64: ${{ secrets.ONDE_KEYSTORE_BASE64 }}
