@@ -1,3 +1,14 @@
+# Onde Player 3.9.0 — Harmonisation automatique des thèmes
+
+- À partir des trois zones personnalisables **Accent**, **Fond** et **Texte**, génération automatique des couleurs secondaires, fonds de sélection, surfaces, contours et séparateurs.
+- États interactifs de **survol**, **appui**, **focus** et lignes sélectionnées : nuances basées sur l'accent du thème au lieu d'effets blancs/verts/bleus codés en dur.
+- Couleur des libellés sur les boutons d'accent et du texte secondaire calculée selon le contraste.
+- Pour un dégradé, les couleurs dérivées utilisent le mélange des deux extrémités ; pour une image, une couleur représentative est échantillonnée localement.
+- Harmonisation des volets, des actions par glissement, des statistiques, du mini-lecteur et des commandes du lecteur.
+- Petit aperçu des teintes calculées dans l'éditeur pour conserver **une interface simple**, sans nouveaux paramètres obligatoires.
+- Tests JVM des contrastes, des accents clairs/sombres et de l'adaptation des états.
+- Version `3.9.0` / Android `versionCode 19`, données et signature inchangées.
+
 # Onde Player 3.8.3 — Lecture longue durée et diagnostic voiture
 
 - Le service de lecture reste au premier plan **entre deux titres**, pendant leur chargement asynchrone, et durant une perte temporaire du focus audio (GPS, téléphone). Le statut Android n'est plus retiré durant ces transitions.

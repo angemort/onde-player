@@ -66,6 +66,7 @@ public final class ThemeEditorDialog {
     private FrameLayout preview;
     private ImageView previewImage;
     private TextView previewTitle, previewAccent, previewText;
+    private LinearLayout generatedColors;
     private TextView[] targetButtons = new TextView[3];
     private TextView[] modeButtons = new TextView[3];
     private int selectedRole = 0;
@@ -89,7 +90,7 @@ public final class ThemeEditorDialog {
         TextView v = text(name, 13, selected ? 0xFF101820 : Ui.TEXT, true);
         v.setGravity(Gravity.CENTER);
         v.setMinHeight(d(45));
-        Ui.clickable(v, Ui.shape(selected ? Ui.ACCENT : Ui.SURFACE_ALT, 13, activity));
+        Ui.clickable(v, Ui.shape(selected ? Ui.ACCENT : Ui.SURFACE_ALT, 13, activity), selected);
         return v;
     }
     private static int roleContrast(int value) {
@@ -163,7 +164,15 @@ public final class ThemeEditorDialog {
         previewContents.addView(sample);
         preview.addView(previewContents,new FrameLayout.LayoutParams(-1,-2));
         content.addView(preview,Ui.lp(activity,-1,-2));
-        content.addView(Ui.gap(activity,15));
+        content.addView(Ui.gap(activity,12));
+        content.addView(text("COULEURS HARMONISÉES AUTOMATIQUEMENT",10,Ui.MUTED,true));
+        content.addView(Ui.gap(activity,5));
+        generatedColors = Ui.horizontal(activity);
+        content.addView(generatedColors,Ui.lp(activity,-1,-2));
+        content.addView(Ui.gap(activity,7));
+        content.addView(text("Boutons, survol, sélection et contours s'adaptent à tes choix.",
+                11,Ui.MUTED,false));
+        content.addView(Ui.gap(activity,17));
 
         content.addView(text("QUE VOULEZ-VOUS PERSONNALISER ?",10,Ui.MUTED,true));
         content.addView(Ui.gap(activity,7));
@@ -253,7 +262,7 @@ public final class ThemeEditorDialog {
         else drawColorControls();
     }
     private void setButton(TextView view,boolean selected) {
-        view.setTextColor(selected ? 0xFF101820 : Ui.TEXT);
+        view.setTextColor(selected ? Ui.ON_ACCENT : Ui.TEXT);
         view.setBackground(Ui.shape(selected ? Ui.ACCENT : Ui.SURFACE_ALT,13,activity));
     }
 
@@ -270,12 +279,37 @@ public final class ThemeEditorDialog {
                 previewImage.setVisibility(View.VISIBLE);
             } else previewImage.setVisibility(View.GONE);
         }
-        previewTitle.setTextColor(ThemeStyle.solid(activity,"text"));
-        previewText.setTextColor(ThemeStyle.solid(activity,"text"));
+        previewTitle.setTextColor(Ui.TEXT);
+        previewText.setTextColor(Ui.TEXT);
         ThemeStyle.applyText(previewTitle,"text");
         ThemeStyle.applyText(previewText,"text");
         previewAccent.setBackground(ThemeStyle.surface(activity,"accent",13));
-        previewAccent.setTextColor(roleContrast(ThemeStyle.solid(activity,"accent")));
+        previewAccent.setTextColor(Ui.ON_ACCENT);
+        renderGeneratedColors();
+    }
+
+    /** Generated tokens are shown as a simple preview, not extra settings. */
+    private void renderGeneratedColors() {
+        if (generatedColors == null) return;
+        generatedColors.removeAllViews();
+        String[] names = {"Survol", "Secondaire", "Sélection", "Contour"};
+        int[] tones = {Ui.ACCENT_HOVER, Ui.ACCENT_SECONDARY, Ui.SELECTION, Ui.OUTLINE};
+        for (int i=0;i<names.length;i++) {
+            final int tone = tones[i];
+            LinearLayout tile=Ui.vertical(activity);
+            tile.setGravity(Gravity.CENTER);
+            TextView sample=text("", 12, Ui.TEXT, true);
+            sample.setBackground(Ui.shape(tone, 9, activity));
+            sample.setContentDescription(names[i]+", nuance calculée depuis le thème");
+            tile.addView(sample,Ui.lp(activity,-1,23));
+            tile.addView(Ui.gap(activity,5));
+            TextView name=text(names[i],10,Ui.MUTED,false);
+            name.setGravity(Gravity.CENTER);
+            tile.addView(name,Ui.lp(activity,-1,24));
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1f);
+            if(i>0)params.leftMargin=d(7);
+            generatedColors.addView(tile,params);
+        }
     }
 
     private void drawImageControls() {
