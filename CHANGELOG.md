@@ -1,3 +1,14 @@
+# Onde Player 3.8.0 — Header compact et thèmes multi-zones
+
+- La barre supérieure, la navigation et les outils de titres se replient réellement après le début du défilement, laissant davantage de place aux morceaux.
+- Fin du scintillement lors du retour en haut : l'en-tête ne se réouvre qu'une fois la liste totalement revenue en haut et le geste terminé.
+- Éditeur de thèmes simplifié : trois rubriques **Accent**, **Fond**, **Texte** ; dans chacune, **Uni**, **Dégradé**, **Image**.
+- Six dégradés guidés par rubrique, deux couleurs sélectionnables dans le color picker, direction et intensité.
+- Les dégradés et images d'accent s'appliquent aux surfaces accentuées, boutons et pictogrammes ; le texte accepte aussi les dégradés et les images locales.
+- Import de photo via le sélecteur Android, URI persistante et cache bitmap échantillonné ; aucune image envoyée en ligne.
+- Les anciens thèmes (y compris fond dégradé et photo) sont reconnus sans perdre les réglages existants.
+- Version Android : `3.8.0` / `versionCode 15`. Identifiant et schéma de données inchangés.
+
 # Onde Player 3.7.0 — En-tête stable et dégradés
 
 - L’en-tête ne change plus de hauteur pendant un geste de défilement : il se replie seulement lorsque la liste s’immobilise.

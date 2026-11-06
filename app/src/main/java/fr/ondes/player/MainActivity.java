@@ -633,8 +633,8 @@ public final class MainActivity extends Activity {
         actions.add(new OptionSheet.Item("✎", "Personnaliser l'apparence", "Accent, fond, couleur du texte et image personnelle", this::showThemeMenu));
         actions.add(new OptionSheet.Item("↻", "Mises à jour", "Version installée, état et recherche des nouvelles versions", this::showUpdateSettings));
         actions.add(new OptionSheet.Item("ⓘ", "Revoir le guide", "Gestes de lecture, sélection et file d'attente", this::startGuide));
-        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.7.1 · Média local et privé", () ->
-                new AlertDialog.Builder(this).setTitle("Onde Player 3.7.1")
+        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.8.0 · Média local et privé", () ->
+                new AlertDialog.Builder(this).setTitle("Onde Player 3.8.0")
                         .setMessage("Lecteur musical hors ligne. Aucun compte ni publicité.\n\nLes statistiques et les playlists restent sur cet appareil. Le temps d'écoute est mesuré à partir de la V3.")
                         .setPositiveButton("Fermer", null).show()));
         OptionSheet.show(this, "Votre bibliothèque", "Réglages et raccourcis", actions);
@@ -1524,7 +1524,7 @@ public final class MainActivity extends Activity {
                                 || listScrollState[0] != SCROLL_STATE_IDLE) return;
                         int first = list.getFirstVisiblePosition();
                         int top = list.getChildCount() == 0 ? 0 : list.getChildAt(0).getTop();
-                        if (headerScrolled && !HeaderScrollRules.shouldCompact(true, first, top, d(5), d(36)))
+                        if (HeaderScrollRules.shouldExpand(headerScrolled, true, first, top, d(5)))
                             setScrolledHeader(false);
                     }, 120);
                 }
@@ -1532,7 +1532,7 @@ public final class MainActivity extends Activity {
                     if (view == null || !hasScanned || activeTrackList != list) return;
                     // Hide the entire upper chrome once, even while dragging. We do NOT
                     // restore it in onScroll (which previously caused viewport jitter).
-                    if (!headerScrolled && !collapseQueued[0] && first >= 3) {
+                    if (HeaderScrollRules.shouldCollapse(headerScrolled, collapseQueued[0], first)) {
                         collapseQueued[0] = true;
                         list.post(() -> {
                             collapseQueued[0] = false;
