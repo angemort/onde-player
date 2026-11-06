@@ -1,3 +1,13 @@
+# Onde Player 3.8.2 — Color picker à deux curseurs et stabilité
+
+- Nouveau **DualColorPickerView** pour les trois dégradés (Accent, Fond, Texte) : deux repères 1 et 2 dans un seul carré saturation/luminosité et dans la barre des teintes.
+- Sélection d'un repère au toucher ; deux boutons de raccourci permettent aussi de choisir précisément la couleur à modifier.
+- Aperçu du dégradé instantané pendant le déplacement du doigt, sans supprimer les composants ni reconstruire le lecteur dans le gestionnaire tactile.
+- Sauvegarde des deux couleurs **après ACTION_UP**, grâce à un callback différé ; même précaution pour le picker de couleur unie.
+- Déplacement des deux curseurs, changement de direction et d'intensité pris en charge sans fermeture de l'éditeur.
+- Tests JVM ajoutés pour la sélection des curseurs proches, superposés ou éloignés.
+- Version Android **3.8.2** (`versionCode 17`), signature et données utilisateur conservées.
+
 # Onde Player 3.8.1 — Animations de navigation dans la bibliothèque
 
 - Le header de la liste des titres coulisse et s'estompe sur une animation, au lieu de disparaître instantanément.

@@ -140,12 +140,10 @@ public final class DualColorPickerView extends View {
                     : shade.top + shade.height() * (1f - hsv[stop][2]);
             measures[stop] = distanceSquared(x, y, hx, hy);
         }
-        // A touch in the general palette edits the currently selected color,
-        // whereas touching a marker chooses that stop automatically.
-        float hitRadiusSq = dp(31) * dp(31);
-        if (measures[0] > hitRadiusSq && measures[1] > hitRadiusSq) return activeStop;
-        if (Math.abs(measures[0] - measures[1]) < dp(6) * dp(6)) return activeStop;
-        return measures[0] <= measures[1] ? 0 : 1;
+        // A touch in the general palette edits the active stop, while a
+        // nearby handle selects its own color. Overlaps retain the active one.
+        return DualColorPickerRules.choose(activeStop,measures[0],measures[1],
+                dp(31)*dp(31),dp(6)*dp(6));
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {

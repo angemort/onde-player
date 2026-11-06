@@ -28,10 +28,13 @@ jobs:
           javac -encoding UTF-8 -d /tmp/onde-header-tests \
             app/src/main/java/fr/ondes/player/HeaderScrollRules.java \
             app/src/main/java/fr/ondes/player/HeaderMotionRules.java \
+            app/src/main/java/fr/ondes/player/DualColorPickerRules.java \
             tests/HeaderScrollRulesTest.java \
-            tests/HeaderMotionRulesTest.java
+            tests/HeaderMotionRulesTest.java \
+            tests/DualColorPickerRulesTest.java
           java -cp /tmp/onde-header-tests HeaderScrollRulesTest
           java -cp /tmp/onde-header-tests HeaderMotionRulesTest
+          java -cp /tmp/onde-header-tests DualColorPickerRulesTest
       - name: Construire APK debug (validation uniquement)
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
