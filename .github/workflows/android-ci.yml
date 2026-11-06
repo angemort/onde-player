@@ -27,8 +27,11 @@ jobs:
           mkdir -p /tmp/onde-header-tests
           javac -encoding UTF-8 -d /tmp/onde-header-tests \
             app/src/main/java/fr/ondes/player/HeaderScrollRules.java \
-            tests/HeaderScrollRulesTest.java
+            app/src/main/java/fr/ondes/player/HeaderMotionRules.java \
+            tests/HeaderScrollRulesTest.java \
+            tests/HeaderMotionRulesTest.java
           java -cp /tmp/onde-header-tests HeaderScrollRulesTest
+          java -cp /tmp/onde-header-tests HeaderMotionRulesTest
       - name: Construire APK debug (validation uniquement)
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4

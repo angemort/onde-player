@@ -121,7 +121,7 @@ public final class MainActivity extends Activity {
     private View brandTitleStack, pageHeading, pageTypes, pageToolbar, pageHint;
     private TextView searchIcon;
     private boolean headerScrolled = false;
-    private boolean headerPreviewDimmed = false;
+    private HeaderMotionController headerMotion;
     private Map<Long, Integer> playlistMembershipCounts = new HashMap<>();
     private Track pendingDelete;
     private ImageView miniCover, fullCover;
@@ -633,8 +633,8 @@ public final class MainActivity extends Activity {
         actions.add(new OptionSheet.Item("✎", "Personnaliser l'apparence", "Accent, fond, couleur du texte et image personnelle", this::showThemeMenu));
         actions.add(new OptionSheet.Item("↻", "Mises à jour", "Version installée, état et recherche des nouvelles versions", this::showUpdateSettings));
         actions.add(new OptionSheet.Item("ⓘ", "Revoir le guide", "Gestes de lecture, sélection et file d'attente", this::startGuide));
-        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.8.0 · Média local et privé", () ->
-                new AlertDialog.Builder(this).setTitle("Onde Player 3.8.0")
+        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.8.1 · Média local et privé", () ->
+                new AlertDialog.Builder(this).setTitle("Onde Player 3.8.1")
                         .setMessage("Lecteur musical hors ligne. Aucun compte ni publicité.\n\nLes statistiques et les playlists restent sur cet appareil. Le temps d'écoute est mesuré à partir de la V3.")
                         .setPositiveButton("Fermer", null).show()));
         OptionSheet.show(this, "Votre bibliothèque", "Réglages et raccourcis", actions);
@@ -729,7 +729,10 @@ public final class MainActivity extends Activity {
         if (hasScanned) render();
         if (activeTrackList != null && firstVisible >= 0) {
             activeTrackList.setSelectionFromTop(firstVisible, firstOffset);
-            activeTrackList.post(() -> setScrolledHeader(firstVisible > 0));
+            activeTrackList.post(() -> {
+                if (headerMotion != null) headerMotion.setImmediate(firstVisible > 0);
+                else setScrolledHeader(firstVisible > 0);
+            });
         }
         refreshPlayer();
         updateSleepBubble();
@@ -1135,8 +1138,11 @@ public final class MainActivity extends Activity {
     }
     private void render() {
         // Rebuilds leave selection mode; restore shared chrome before rendering a new screen.
+        if (headerMotion != null) {
+            headerMotion.dispose();
+            headerMotion = null;
+        }
         headerScrolled = false;
-        headerPreviewDimmed = false;
         pageHeading = null; pageTypes = null; pageToolbar = null; pageHint = null;
         setSelectionHeaderCompact(false);
         setScrolledHeader(false);
@@ -1164,24 +1170,24 @@ public final class MainActivity extends Activity {
         if (headerSubtitle != null) headerSubtitle.setVisibility(View.GONE);
     }
 
-    /** A single, decisive collapse rather than an opacity-only preview.
-     * Re-expansion happens only at rest AND at the real top: while a finger
-     * stays on screen this method never oscillates between two viewport sizes. */
+    /** Only the gesture controller animates. This method commits visibility
+     * once; it also safely resets chrome on screen/theme rebuilds. */
     private void setScrolledHeader(boolean compact) {
         if (!screen.equals("Titres")) compact = false;
         headerScrolled = compact;
-        headerPreviewDimmed = false;
         if (brandHeader != null) brandHeader.setVisibility(compact ? View.GONE : View.VISIBLE);
         if (tabHeader != null) tabHeader.setVisibility(compact ? View.GONE : View.VISIBLE);
         if (brandTitleStack != null) {
             brandTitleStack.animate().cancel();
             brandTitleStack.setAlpha(1f);
+            brandTitleStack.setTranslationY(0f);
             brandTitleStack.setVisibility(View.VISIBLE);
         }
         for (View v : new View[]{pageHeading, pageTypes, pageToolbar, pageHint}) {
             if (v == null) continue;
             v.animate().cancel();
             v.setAlpha(1f);
+            v.setTranslationY(0f);
             v.setVisibility(compact ? View.GONE : View.VISIBLE);
         }
     }
@@ -1487,7 +1493,15 @@ public final class MainActivity extends Activity {
             showEmpty(empty, "Aucun morceau", "Les titres présents sur le téléphone apparaîtront ici.", null, null);
             return;
         }
-        ListView list = new ListView(this);
+        ListView list = new ListView(this) {
+            // Receive every vertical gesture even if a track row has its own
+            // swipe handler. We never intercept or consume touch events.
+            @Override public boolean dispatchTouchEvent(MotionEvent event) {
+                if (headerMotion != null && activeTrackList == this)
+                    headerMotion.onTouch(event);
+                return super.dispatchTouchEvent(event);
+            }
+        };
         list.setDivider(null);
         list.setSelector(android.R.color.transparent);
         list.setClipToPadding(false);
@@ -1512,34 +1526,13 @@ public final class MainActivity extends Activity {
                     if (index >= 0) list.setSelectionFromTop(index, 0);
                 });
             }
-            final int[] listScrollState = {android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE};
-            final boolean[] collapseQueued = {false};
             list.setOnScrollListener(new android.widget.AbsListView.OnScrollListener() {
                 @Override public void onScrollStateChanged(android.widget.AbsListView view, int state) {
-                    listScrollState[0] = state;
-                    if (state != SCROLL_STATE_IDLE || activeTrackList != list) return;
-                    // Never expand under a held finger or during a fling.
-                    list.postDelayed(() -> {
-                        if (activeTrackList != list || !screen.equals("Titres")
-                                || listScrollState[0] != SCROLL_STATE_IDLE) return;
-                        int first = list.getFirstVisiblePosition();
-                        int top = list.getChildCount() == 0 ? 0 : list.getChildAt(0).getTop();
-                        if (HeaderScrollRules.shouldExpand(headerScrolled, true, first, top, d(5)))
-                            setScrolledHeader(false);
-                    }, 120);
+                    if (headerMotion != null && activeTrackList == list)
+                        headerMotion.onScrollStateChanged(state);
                 }
                 @Override public void onScroll(android.widget.AbsListView view, int first, int visible, int total) {
-                    if (view == null || !hasScanned || activeTrackList != list) return;
-                    // Hide the entire upper chrome once, even while dragging. We do NOT
-                    // restore it in onScroll (which previously caused viewport jitter).
-                    if (HeaderScrollRules.shouldCollapse(headerScrolled, collapseQueued[0], first)) {
-                        collapseQueued[0] = true;
-                        list.post(() -> {
-                            collapseQueued[0] = false;
-                            if (activeTrackList == list && screen.equals("Titres") && !headerScrolled
-                                    && list.getFirstVisiblePosition() >= 2) setScrolledHeader(true);
-                        });
-                    }
+                    // A viewport relayout must never trigger another header relayout.
                     if (az != null && first >= 0 && first < tracks.size())
                         az.highlight(AlphabetRules.group(tracks.get(first).title));
                 }
@@ -1553,6 +1546,16 @@ public final class MainActivity extends Activity {
         } else listFrame.addView(list, new FrameLayout.LayoutParams(-1, -1));
         enableBulkSelection(layout, list, tracks, adapter);
         layout.addView(listFrame, new LinearLayout.LayoutParams(-1, 0, 1f));
+        if (screen.equals("Titres")) {
+            headerMotion = new HeaderMotionController(this, list, listFrame,
+                    new View[]{brandHeader, tabHeader, pageHeading, pageTypes, pageToolbar, pageHint},
+                    headerScrolled, new HeaderMotionController.Delegate() {
+                @Override public void applyImmediate(boolean compact) { setScrolledHeader(compact); }
+                @Override public boolean isCurrent(ListView candidate) {
+                    return activeTrackList == candidate && screen.equals("Titres");
+                }
+            });
+        }
     }
     private void playQueuedTrack(int position) {
         if (service == null) return;

@@ -1,3 +1,13 @@
+# Onde Player 3.8.1 — Animations de navigation dans la bibliothèque
+
+- Le header de la liste des titres coulisse et s'estompe sur une animation, au lieu de disparaître instantanément.
+- Il revient après un geste vers le haut **depuis n'importe quel titre**, sans nécessiter le retour au tout début de la liste.
+- La direction du doigt est mesurée dans les coordonnées physiques de l'écran ; les changements de hauteur sont réalisés après le relâchement, pour éviter le tremblement pendant un appui prolongé.
+- Le décalage vertical de la liste est compensé et animé lorsque le header reprend ou libère son espace.
+- Les animations en attente sont invalidées lors d'un changement d'écran ; les changements de thème conservent l'état du header.
+- Tests de non-régression pour les gestes inversés, les petits mouvements involontaires et le seuil de déclenchement.
+- Version 3.8.1 (code Android 16), même clé et même base de playlists.
+
 # Onde Player 3.8.0 — Header compact et thèmes multi-zones
 
 - La barre supérieure, la navigation et les outils de titres se replient réellement après le début du défilement, laissant davantage de place aux morceaux.
