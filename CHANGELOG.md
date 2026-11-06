@@ -1,3 +1,11 @@
+# Onde Player 3.7.0 — En-tête stable et dégradés
+
+- L’en-tête ne change plus de hauteur pendant un geste de défilement : il se replie seulement lorsque la liste s’immobilise.
+- Six dégradés disponibles : Nuit électrique, Océan, Aurore, Braise, Forêt et Prune.
+- Édition guidée de deux couleurs, direction, intensité, aperçu immédiat et retour au fond uni.
+- Compatibilité avec le texte personnalisé et les fonds photo. Choix mémorisés localement.
+- Tests de régression sur l’hystérésis du défilement.
+
 # Changements V3.6.0
 
 - Drag & drop en maintenant un morceau dans une playlist personnelle, avec ordre persistant en SQLite et défilement proche des bords.
