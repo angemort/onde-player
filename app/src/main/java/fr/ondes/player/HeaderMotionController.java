@@ -32,6 +32,9 @@ public final class HeaderMotionController {
     private final Delegate delegate;
     private final float threshold;
     private int scrollState = AbsListView.OnScrollListener.SCROLL_STATE_IDLE;
+    private int previousFirst = -1;
+    private int previousTop;
+    private float flingDistance;
     private float lastRawY;
     private float gestureDistance;
     private boolean touching;
@@ -85,10 +88,35 @@ public final class HeaderMotionController {
 
     public void onScrollStateChanged(int state) {
         scrollState = state;
-        if (disposed || touching || !delegate.isCurrent(list)) return;
-        if (state == AbsListView.OnScrollListener.SCROLL_STATE_IDLE && atTop() && compact) {
-            request(false);
+        if (state == AbsListView.OnScrollListener.SCROLL_STATE_FLING) {
+            previousFirst = -1;
+            flingDistance = 0f;
         }
+        if (disposed || touching || !delegate.isCurrent(list)) return;
+        if (state == AbsListView.OnScrollListener.SCROLL_STATE_IDLE && atTop() && compact)
+            request(false);
+    }
+
+    /** Short flings can move only a few pixels before the finger leaves the
+     * display; continue tracking their direction after ACTION_UP. */
+    public void onScroll(int first, int firstTop) {
+        if (disposed || !delegate.isCurrent(list)) return;
+        if (touching || animating || scrollState != AbsListView.OnScrollListener.SCROLL_STATE_FLING) {
+            previousFirst = first;
+            previousTop = firstTop;
+            return;
+        }
+        if (previousFirst >= 0) {
+            float rowHeight = Math.max(Ui.dp(activity, 60),
+                    list.getChildCount() > 0 ? list.getChildAt(0).getHeight() : Ui.dp(activity, 60));
+            float movedDown = (first - previousFirst) * rowHeight + previousTop - firstTop;
+            flingDistance = HeaderMotionRules.accumulate(flingDistance, movedDown, threshold * 3f);
+            int direction = HeaderMotionRules.scrollIntent(flingDistance, threshold);
+            if (direction == HeaderMotionRules.SHOW && compact) request(false);
+            else if (direction == HeaderMotionRules.HIDE && !compact) request(true);
+        }
+        previousFirst = first;
+        previousTop = firstTop;
     }
 
     private boolean atTop() {

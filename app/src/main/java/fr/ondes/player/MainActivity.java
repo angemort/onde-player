@@ -1533,6 +1533,10 @@ public final class MainActivity extends Activity {
                 }
                 @Override public void onScroll(android.widget.AbsListView view, int first, int visible, int total) {
                     // A viewport relayout must never trigger another header relayout.
+                    if (headerMotion != null && activeTrackList == list) {
+                        int firstTop = list.getChildCount() == 0 ? 0 : list.getChildAt(0).getTop();
+                        headerMotion.onScroll(first, firstTop);
+                    }
                     if (az != null && first >= 0 && first < tracks.size())
                         az.highlight(AlphabetRules.group(tracks.get(first).title));
                 }

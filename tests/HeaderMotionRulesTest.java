@@ -19,6 +19,9 @@ public final class HeaderMotionRulesTest {
         distance = HeaderMotionRules.accumulate(distance,48,115);
         expect(HeaderMotionRules.intent(distance,46)==show,"Une remontée affiche la barre");
         expect(HeaderMotionRules.accumulate(114,40,115)==115,"Distance bornée");
+        expect(HeaderMotionRules.scrollIntent(90,46)==hide,"Inertie vers le bas masque le header");
+        expect(HeaderMotionRules.scrollIntent(-90,46)==show,"Inertie vers le haut affiche le header");
+        expect(HeaderMotionRules.scrollIntent(12,46)==none,"Petite inertie ignorée");
         System.out.println("HeaderMotionRules: OK");
     }
 }

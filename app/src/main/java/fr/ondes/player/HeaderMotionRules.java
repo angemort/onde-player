@@ -20,4 +20,7 @@ public final class HeaderMotionRules {
         if (gestureDistance <= -threshold) return HIDE;
         return NONE;
     }
+    public static int scrollIntent(float distanceDownTheList, float threshold) {
+        return intent(-distanceDownTheList, threshold);
+    }
 }
