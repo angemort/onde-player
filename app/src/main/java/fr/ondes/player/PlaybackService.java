@@ -74,6 +74,8 @@ public final class PlaybackService extends Service {
     private boolean hasPublishedNotification = false;
     private boolean resumeAfterFocus = false;
     private boolean restoringPlayback = false;
+    /** True after onStartCommand; a bound-only service dies when Activity unbinds. */
+    private boolean hasStartedLifetime = false;
     private PowerManager.WakeLock preparationWakeLock;
     private boolean playLogged = false;
     private long listeningStartedElapsed = 0L;
@@ -163,10 +165,34 @@ public final class PlaybackService extends Service {
         main.postDelayed(checkpoint, 15000L);
     }
 
-    @Override public IBinder onBind(Intent intent) { return binder; }
+    @Override public IBinder onBind(Intent intent) {
+        PlaybackDiagnostics.event(this, "SERVICE_LIE", "L'interface contrôle la lecture");
+        return binder;
+    }
+
+    /**
+     * A restored queue can be controlled by an Activity using BIND_AUTO_CREATE.
+     * That bind alone does not keep audio running after onStop()/unbindService().
+     * Promote the bound player to a started service before any play operation.
+     * This is idempotent and cannot restart a user-paused session on its own.
+     */
+    private void ensureStartedForPlayback() {
+        if (hasStartedLifetime) return;
+        try {
+            startService(new Intent(this, PlaybackService.class));
+            // onStartCommand is invoked asynchronously on the main thread after
+            // this method returns; the actual started state is logged there.
+            PlaybackDiagnostics.event(this, "DEMANDE_SERVICE_AUTONOME", "Lecture demandée depuis l'interface");
+        } catch (RuntimeException exception) {
+            PlaybackDiagnostics.event(this, "DEMARRAGE_SERVICE_REFUSE",
+                    exception.getClass().getSimpleName());
+        }
+    }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        hasStartedLifetime = true;
         String action = intent == null ? null : intent.getAction();
+        PlaybackDiagnostics.event(this, "SERVICE_AUTONOME", action == null ? "Sans action" : action);
         if (intent == null) {
             // START_STICKY allows a system-killed player to reconstruct its local
             // queue and position. Do not restart a user-paused session.
@@ -531,6 +557,7 @@ public final class PlaybackService extends Service {
 
     public void playTracks(List<Track> tracks, int selected) {
         if (tracks == null || tracks.isEmpty() || selected < 0 || selected >= tracks.size()) return;
+        ensureStartedForPlayback();
         order.clear(); original.clear(); pending.clear(); history.clear();
         for (Track t : tracks) { order.add(t.id); original.add(t.id); }
         index = selected;
@@ -549,6 +576,7 @@ public final class PlaybackService extends Service {
 
     public void resume() {
         if (current == null) return;
+        ensureStartedForPlayback();
         if (!prepared || player == null) {
             startOnReady = true;
             if (!loading) open(current, true, resumePosition);
@@ -784,6 +812,7 @@ public final class PlaybackService extends Service {
     }
 
     private void open(Track track, boolean autoStart, long position) {
+        if (autoStart) ensureStartedForPlayback();
         flushListening();
         listeningStartedElapsed = 0L;
         if (track == null) { recoverError(); return; }
@@ -931,6 +960,7 @@ public final class PlaybackService extends Service {
     }
     public void stopPlayback() {
         PlaybackDiagnostics.event(this, "ARRET_MANUEL", "Action Arrêter");
+        hasStartedLifetime = false;
         releasePreparationWake();
         flushListening(); listeningStartedElapsed = 0L;
         playing = false; loading = false; prepared = false; startOnReady = false;
@@ -1018,7 +1048,9 @@ public final class PlaybackService extends Service {
     }
 
     @Override public void onDestroy() {
-        PlaybackDiagnostics.event(this, "SERVICE_TERMINE", "Actif=" + playing + ", chargement=" + loading);
+        PlaybackDiagnostics.event(this, "SERVICE_TERMINE", "Actif=" + playing
+                + ", chargement=" + loading + ", autonome=" + hasStartedLifetime
+                + ", premierPlan=" + isForeground);
         releasePreparationWake();
         flushListening(); listeningStartedElapsed = 0L;
         save();
