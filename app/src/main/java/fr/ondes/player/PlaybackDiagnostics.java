@@ -1,6 +1,8 @@
 package fr.ondes.player;
 
 import android.content.Context;
+import android.app.NotificationManager;
+import android.app.NotificationChannel;
 import android.content.SharedPreferences;
 import java.text.DateFormat;
 import java.util.Date;
@@ -36,6 +38,23 @@ public final class PlaybackDiagnostics {
                 .getSharedPreferences(STORE, Context.MODE_PRIVATE);
         String events = p.getString("events", "");
         StringBuilder text = new StringBuilder("Onde Player — Diagnostic de lecture\n\n");
+        try {
+            NotificationManager manager = (NotificationManager) context.getSystemService(
+                    Context.NOTIFICATION_SERVICE);
+            if (manager != null) {
+                text.append("Notifications autorisées : ")
+                        .append(manager.areNotificationsEnabled() ? "oui" : "NON")
+                        .append('\n');
+                NotificationChannel channel = manager.getNotificationChannel("onde_playback");
+                if (channel != null) {
+                    text.append("Canal Lecture musicale : ")
+                            .append(channel.getImportance() == NotificationManager.IMPORTANCE_NONE
+                                    ? "DÉSACTIVÉ" : "actif")
+                            .append("\n");
+                }
+                text.append('\n');
+            }
+        } catch (RuntimeException ignored) { /* Diagnostic must not crash the app. */ }
         text.append("Événements récents (du plus ancien au plus récent) :\n");
         if (events == null || events.isEmpty())
             text.append("Aucun événement enregistré depuis cette version.\n");
