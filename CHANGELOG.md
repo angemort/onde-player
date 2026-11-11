@@ -1,3 +1,13 @@
+# Onde Player 3.9.2 — Vérification des mises à jour simplifiée
+
+- Le menu Mises à jour démarre immédiatement la recherche au lieu d'attendre un clic supplémentaire.
+- Requête HTTPS du manifeste sans cache, avec contournement du cache CDN de raw.githubusercontent.com après une publication.
+- Version installée, version distante et codes de version affichés explicitement.
+- En cas d'échec du réseau, explication plus précise et lien vers les Releases GitHub officielles.
+- Bouton « Revérifier » toujours disponible après une recherche.
+- La vérification au lancement reste limitée à une fois toutes les 24 heures ; les vérifications manuelles ne sont pas limitées.
+- `versionCode 21`, `versionName 3.9.2`, données utilisateur et clé de signature inchangées.
+
 # Onde Player 3.9.1 — Correction de la lecture écran verrouillé
 
 - Correctif ciblé pour le lecteur Android : une reprise depuis un service seulement **lié à l'Activity** (ex. lecture restaurée puis bouton Lecture) démarre désormais explicitement le service avant de jouer.

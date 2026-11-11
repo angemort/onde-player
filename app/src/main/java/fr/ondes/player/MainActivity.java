@@ -644,8 +644,8 @@ public final class MainActivity extends Activity {
         actions.add(new OptionSheet.Item("✎", "Personnaliser l'apparence", "Accent, fond, couleur du texte et image personnelle", this::showThemeMenu));
         actions.add(new OptionSheet.Item("↻", "Mises à jour", "Version installée, état et recherche des nouvelles versions", this::showUpdateSettings));
         actions.add(new OptionSheet.Item("ⓘ", "Revoir le guide", "Gestes de lecture, sélection et file d'attente", this::startGuide));
-        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.9.1 · Média local et privé", () ->
-                new AlertDialog.Builder(this).setTitle("Onde Player 3.9.1")
+        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.9.2 · Média local et privé", () ->
+                new AlertDialog.Builder(this).setTitle("Onde Player 3.9.2")
                         .setMessage("Lecteur musical hors ligne. Aucun compte ni publicité.\n\nLes statistiques et les playlists restent sur cet appareil. Le temps d'écoute est mesuré à partir de la V3.")
                         .setPositiveButton("Fermer", null).show()));
         OptionSheet.show(this, "Votre bibliothèque", "Réglages et raccourcis", actions);

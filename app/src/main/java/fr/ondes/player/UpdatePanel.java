@@ -39,6 +39,7 @@ public final class UpdatePanel {
     private TextView description;
     private TextView checkButton;
     private TextView downloadButton;
+    private TextView githubButton;
     private ProgressBar spinner;
     private boolean checking;
     private UpdateChecker.Release available;
@@ -171,7 +172,15 @@ public final class UpdatePanel {
         downloadButton.setVisibility(View.GONE);
         downloadButton.setOnClickListener(v -> download());
 
-        root.addView(Ui.gap(activity, 18));
+        root.addView(Ui.gap(activity, 12));
+        githubButton = label("Voir les versions sur GitHub", 13, Ui.ACCENT, true);
+        githubButton.setGravity(Gravity.CENTER);
+        githubButton.setContentDescription("Ouvrir la page officielle des versions d'Onde Player");
+        githubButton.setMinHeight(dp(43));
+        githubButton.setOnClickListener(v -> openUrl("https://github.com/angemort/onde-player/releases/latest"));
+        root.addView(githubButton, Ui.lp(activity, -1, 43));
+
+        root.addView(Ui.gap(activity, 12));
         TextView footer = label("Vérification automatique au lancement, au maximum une fois toutes les 24 heures. Installation confirmée par Android.", 11, Ui.MUTED, false);
         footer.setGravity(Gravity.CENTER);
         footer.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
@@ -189,6 +198,9 @@ public final class UpdatePanel {
         }
         dialog.show();
         if (window != null) window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        // Opening this screen means the user wants an immediate check.
+        // The once-per-day limit is only for startup background checks.
+        verify();
     }
 
     private String lastCheckLabel() {
@@ -208,6 +220,7 @@ public final class UpdatePanel {
         checkButton.setEnabled(false);
         checkButton.setAlpha(.55f);
         checkButton.setText("Recherche en cours…");
+        latestVersion.setText("Recherche…");
         downloadButton.setVisibility(View.GONE);
 
         executor.execute(() -> {
@@ -227,7 +240,9 @@ public final class UpdatePanel {
                 if (error != null) {
                     status.setText("Vérification impossible");
                     latestVersion.setText("Indisponible");
-                    description.setText("Impossible de contacter GitHub. Vérifiez votre connexion Internet, puis réessayez.");
+                    description.setText("Connexion ou lecture du manifeste impossible : "
+                            + error.getClass().getSimpleName()
+                            + ". Réessayez ou ouvrez la dernière Release sur GitHub ci-dessous.");
                     return;
                 }
                 long when = System.currentTimeMillis();
@@ -237,7 +252,9 @@ public final class UpdatePanel {
                 latestVersion.setText("v" + found.versionName);
                 if (found.versionCode <= installedCode) {
                     status.setText("Votre application est à jour");
-                    description.setText("Vous utilisez déjà la dernière version d'Onde Player.");
+                    description.setText("Vous utilisez la version " + installedName
+                            + " (code " + installedCode + "). La dernière version publiée est "
+                            + found.versionName + " (code " + found.versionCode + ").");
                 } else {
                     available = found;
                     status.setText("Nouvelle version disponible");
@@ -251,15 +268,18 @@ public final class UpdatePanel {
         });
     }
 
-    private void download() {
-        if (available == null || !UpdateChecker.https(available.apkUrl)) return;
+    private void openUrl(String url) {
+        if (!UpdateChecker.https(url)) return;
         try {
-            Intent open = new Intent(Intent.ACTION_VIEW, Uri.parse(available.apkUrl));
+            Intent open = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             open.addCategory(Intent.CATEGORY_BROWSABLE);
             activity.startActivity(open);
         } catch (Exception e) {
-            status.setText("Téléchargement indisponible");
-            description.setText("Impossible d'ouvrir le lien APK. Réessayez avec un navigateur installé.");
+            status.setText("Ouverture impossible");
+            description.setText("Impossible d'ouvrir GitHub : vérifiez qu'un navigateur est installé.");
         }
+    }
+    private void download() {
+        if (available != null) openUrl(available.apkUrl);
     }
 }

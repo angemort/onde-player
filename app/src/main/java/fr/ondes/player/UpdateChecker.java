@@ -29,10 +29,21 @@ public final class UpdateChecker {
 
     public static Release fetch(String feedUrl) throws Exception {
         if (!https(feedUrl)) throw new IllegalArgumentException("L'adresse du manifeste doit être en HTTPS.");
-        HttpURLConnection connection = (HttpURLConnection) new URL(feedUrl).openConnection();
+        // GitHub's raw CDN may cache update.json briefly after a Release.
+        // A fresh query parameter prevents serving a previously published version.
+        URL source = new URL(feedUrl);
+        String requestUrl = feedUrl;
+        if ("raw.githubusercontent.com".equalsIgnoreCase(source.getHost())) {
+            requestUrl += (feedUrl.contains("?") ? "&" : "?")
+                    + "onde_version_check=" + System.currentTimeMillis();
+        }
+        HttpURLConnection connection = (HttpURLConnection) new URL(requestUrl).openConnection();
+        connection.setUseCaches(false);
         connection.setConnectTimeout(8000);
         connection.setReadTimeout(8000);
         connection.setRequestProperty("Accept", "application/json");
+        connection.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0");
+        connection.setRequestProperty("Pragma", "no-cache");
         connection.setInstanceFollowRedirects(true);
         try {
             if (connection.getResponseCode() != 200) throw new IllegalStateException("Réponse HTTP " + connection.getResponseCode());
