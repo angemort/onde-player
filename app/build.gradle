@@ -10,8 +10,8 @@ android {
         applicationId 'fr.ondes.player'
         minSdk 26
         targetSdk 34
-        versionCode 19
-        versionName '3.9.0'
+        versionCode 20
+        versionName '3.9.1'
     }
 
     // Signed releases are only built if all four variables are supplied.

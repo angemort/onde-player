@@ -1,3 +1,12 @@
+# Onde Player 3.9.1 — Correction de la lecture écran verrouillé
+
+- Correctif ciblé pour le lecteur Android : une reprise depuis un service seulement **lié à l'Activity** (ex. lecture restaurée puis bouton Lecture) démarre désormais explicitement le service avant de jouer.
+- Promotion automatique depuis les chemins de lancement d'une playlist, reprise d'écoute et chargement d'un nouveau morceau ; cela prévient l'arrêt automatique du service au débranchement de l'Activity.
+- Sécurité supplémentaire dans `MainActivity.onStop()` : si une lecture/chargement est actif, l'application demande un démarrage autonome avant de libérer le lien au service.
+- Diagnostic enrichi : `SERVICE_LIE`, `SERVICE_AUTONOME`, `INTERFACE_DECONNECTEE` et état `autonome/premierPlan` lors de `SERVICE_TERMINE`, pour distinguer problème de cycle de vie et restrictions Samsung.
+- Aucune demande de privilèges spéciaux, aucune lecture forcée après une pause manuelle. Les playlists, leur format de stockage, l'identifiant d'application et la signature restent inchangés.
+- Version Android `3.9.1` / `versionCode 20`.
+
 # Onde Player 3.9.0 — Harmonisation automatique des thèmes
 
 - À partir des trois zones personnalisables **Accent**, **Fond** et **Texte**, génération automatique des couleurs secondaires, fonds de sélection, surfaces, contours et séparateurs.

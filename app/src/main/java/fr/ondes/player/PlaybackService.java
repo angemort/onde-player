@@ -170,6 +170,13 @@ public final class PlaybackService extends Service {
         return binder;
     }
 
+    @Override public boolean onUnbind(Intent intent) {
+        PlaybackDiagnostics.event(this, "INTERFACE_DECONNECTEE",
+                "Lecture=" + playing + ", autonome=" + hasStartedLifetime
+                        + ", premierPlan=" + isForeground);
+        return super.onUnbind(intent);
+    }
+
     /**
      * A restored queue can be controlled by an Activity using BIND_AUTO_CREATE.
      * That bind alone does not keep audio running after onStop()/unbindService().
