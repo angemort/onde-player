@@ -16,6 +16,9 @@ import android.widget.TextView;
  * The horizontal action commits only when the gesture ends very close to the row edge. */
 public final class SwipeTrackRow extends FrameLayout {
     private final LinearLayout front;
+    private final View playingStripe;
+    private boolean selectedRow;
+    private int playingState = PlayingTrackRules.OTHER;
     private final LinearLayout nextAction;
     private final LinearLayout queueAction;
     private final TextView nextDescription;
@@ -59,6 +62,18 @@ public final class SwipeTrackRow extends FrameLayout {
         front.setPadding(Ui.dp(context, 8), Ui.dp(context, 7), Ui.dp(context, 5), Ui.dp(context, 7));
         front.setBackground(Ui.shape(Ui.SURFACE, 13, context));
         addView(front, new FrameLayout.LayoutParams(-1, -2));
+
+        // Thin accent stripe sits above the row without consuming any
+        // horizontal or vertical space. It does not intercept row swipes.
+        playingStripe = new View(context);
+        playingStripe.setClickable(false);
+        playingStripe.setFocusable(false);
+        playingStripe.setBackground(Ui.shape(Ui.ACCENT, 3, context));
+        playingStripe.setVisibility(View.GONE);
+        FrameLayout.LayoutParams stripeParams = new FrameLayout.LayoutParams(
+                Ui.dp(context, 3), Ui.dp(context, 39), Gravity.START | Gravity.CENTER_VERTICAL);
+        stripeParams.leftMargin = Ui.dp(context, 2);
+        addView(playingStripe, stripeParams);
     }
 
     private static LinearLayout action(Context c, String glyph, String label, int background) {
@@ -83,8 +98,23 @@ public final class SwipeTrackRow extends FrameLayout {
         onNext = next;
         onQueue = enqueue;
     }
+    private void renderRowBackground() {
+        int shade = selectedRow ? Ui.SELECTION
+                : playingState == PlayingTrackRules.PLAYING ? Ui.ACCENT_SECONDARY
+                : playingState == PlayingTrackRules.PAUSED ? Ui.ACCENT_SUBTLE : Ui.SURFACE;
+        front.setBackground(Ui.shape(shade, 13, getContext()));
+        playingStripe.setVisibility(playingState == PlayingTrackRules.OTHER ? View.GONE : View.VISIBLE);
+        playingStripe.setAlpha(playingState == PlayingTrackRules.PAUSED ? .5f : 1f);
+    }
+    public void setPlaybackVisual(int newState) {
+        if (playingState == newState) return;
+        playingState = newState;
+        renderRowBackground();
+    }
     public void setSelectionVisual(boolean selected) {
-        front.setBackground(Ui.shape(selected ? Ui.SELECTION : Ui.SURFACE, 13, getContext()));
+        if (selectedRow == selected) return;
+        selectedRow = selected;
+        renderRowBackground();
     }
     public void setSwipeEnabled(boolean enabled) { swipeEnabled = enabled; }
     public void resetPosition() {

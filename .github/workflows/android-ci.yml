@@ -31,16 +31,19 @@ jobs:
             app/src/main/java/fr/ondes/player/DualColorPickerRules.java \
             app/src/main/java/fr/ondes/player/PlaybackContinuityRules.java \
             app/src/main/java/fr/ondes/player/ThemePalette.java \
+            app/src/main/java/fr/ondes/player/PlayingTrackRules.java \
             tests/HeaderScrollRulesTest.java \
             tests/HeaderMotionRulesTest.java \
             tests/DualColorPickerRulesTest.java \
             tests/PlaybackContinuityRulesTest.java \
-            tests/ThemePaletteTest.java
+            tests/ThemePaletteTest.java \
+            tests/PlayingTrackRulesTest.java
           java -cp /tmp/onde-header-tests HeaderScrollRulesTest
           java -cp /tmp/onde-header-tests HeaderMotionRulesTest
           java -cp /tmp/onde-header-tests DualColorPickerRulesTest
           java -cp /tmp/onde-header-tests PlaybackContinuityRulesTest
           java -cp /tmp/onde-header-tests ThemePaletteTest
+          java -cp /tmp/onde-header-tests PlayingTrackRulesTest
       - name: Construire APK debug (validation uniquement)
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4

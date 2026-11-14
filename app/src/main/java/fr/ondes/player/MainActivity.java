@@ -644,8 +644,8 @@ public final class MainActivity extends Activity {
         actions.add(new OptionSheet.Item("✎", "Personnaliser l'apparence", "Accent, fond, couleur du texte et image personnelle", this::showThemeMenu));
         actions.add(new OptionSheet.Item("↻", "Mises à jour", "Version installée, état et recherche des nouvelles versions", this::showUpdateSettings));
         actions.add(new OptionSheet.Item("ⓘ", "Revoir le guide", "Gestes de lecture, sélection et file d'attente", this::startGuide));
-        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.9.2 · Média local et privé", () ->
-                new AlertDialog.Builder(this).setTitle("Onde Player 3.9.2")
+        actions.add(new OptionSheet.Item("ⓘ", "À propos", "Version 3.9.3 · Média local et privé", () ->
+                new AlertDialog.Builder(this).setTitle("Onde Player 3.9.3")
                         .setMessage("Lecteur musical hors ligne. Aucun compte ni publicité.\n\nLes statistiques et les playlists restent sur cet appareil. Le temps d'écoute est mesuré à partir de la V3.")
                         .setPositiveButton("Fermer", null).show()));
         OptionSheet.show(this, "Votre bibliothèque", "Réglages et raccourcis", actions);
@@ -2700,6 +2700,22 @@ public final class MainActivity extends Activity {
         TrackAdapter(List<Track> tracks, boolean queueMode, boolean showCounts) {
             this.tracks = tracks; this.queueMode = queueMode; this.showCounts = showCounts;
         }
+        /** Applies only lightweight visuals: no adapter refresh or scroll reset. */
+        private void bindPlayingState(Holder holder, Track rowTrack) {
+            Track current = service == null ? null : service.getCurrent();
+            int state = PlayingTrackRules.state(rowTrack.id, current != null,
+                    current == null ? 0L : current.id,
+                    service != null && service.isPlaying());
+            holder.root.setPlaybackVisual(state);
+            holder.title.setTextColor(state == PlayingTrackRules.OTHER ? Ui.TEXT : Ui.ACCENT);
+            holder.playingMarker.setVisibility(state == PlayingTrackRules.OTHER ? View.GONE : View.VISIBLE);
+            if (state != PlayingTrackRules.OTHER) {
+                boolean isPlaying = state == PlayingTrackRules.PLAYING;
+                holder.playingMarker.setText(isPlaying ? "♫" : "Ⅱ");
+                holder.playingMarker.setTextColor(isPlaying ? Ui.ACCENT : Ui.MUTED);
+                holder.playingMarker.setContentDescription(isPlaying ? "Lecture en cours" : "Lecture en pause");
+            }
+        }
         @Override public int getCount() { return tracks.size(); }
         @Override public Object getItem(int position) { return tracks.get(position); }
         @Override public long getItemId(int pos) { return tracks.get(pos).id; }
@@ -2707,7 +2723,7 @@ public final class MainActivity extends Activity {
             SwipeTrackRow root;
             CheckBox check;
             ImageView art;
-            TextView title, sub, member, more, dragGrip;
+            TextView title, sub, member, more, dragGrip, playingMarker;
         }
         @Override public View getView(int position, View convert, ViewGroup parent) {
             Holder holder;
@@ -2746,6 +2762,16 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams mb = Ui.lp(MainActivity.this, -2, -2);
                 mb.rightMargin = d(3);
                 front.addView(member, mb);
+                // A compact music glyph is much clearer than title color alone.
+                TextView playingMarker = Ui.text(MainActivity.this, "♫", 18, Ui.ACCENT, true);
+                playingMarker.setGravity(Gravity.CENTER);
+                playingMarker.setVisibility(View.GONE);
+                playingMarker.setClickable(false);
+                playingMarker.setFocusable(false);
+                playingMarker.setContentDescription("Lecture en cours");
+                LinearLayout.LayoutParams markerParams = Ui.lp(MainActivity.this, 27, 39);
+                markerParams.rightMargin = d(2);
+                front.addView(playingMarker, markerParams);
                 TextView dragGrip = Ui.icon(MainActivity.this, "☷", 28, 20, Ui.MUTED, Color.TRANSPARENT);
                 dragGrip.setVisibility(View.GONE);
                 dragGrip.setClickable(false);
@@ -2759,12 +2785,12 @@ public final class MainActivity extends Activity {
                 holder.root = row; holder.check = check; holder.art = art;
                 holder.title = title; holder.sub = sub; holder.member = member; holder.more = more;
                 holder.dragGrip = dragGrip;
+                holder.playingMarker = playingMarker;
                 convert = row; convert.setTag(holder);
             } else holder = (Holder) convert.getTag();
             Track t = tracks.get(position);
             holder.title.setText(t.title);
-            holder.title.setTextColor(service != null && service.getCurrent() != null
-                    && service.getCurrent().id == t.id ? Ui.ACCENT : Ui.TEXT);
+            bindPlayingState(holder, t);
             if (showCounts) {
                 int count = store.playCount(t.id);
                 holder.sub.setText((t.isVideo ? "▶ VIDÉO  •  " : "♫  ") + t.artist + "  •  " + count + (count == 1 ? " écoute" : " écoutes")
@@ -2876,7 +2902,14 @@ public final class MainActivity extends Activity {
                     }
                 });
             }
-            row.setContentDescription(t.title + ", " + t.artist + ". Toucher pour lire, "
+            int audibleState = PlayingTrackRules.state(t.id,
+                    service != null && service.getCurrent() != null,
+                    service != null && service.getCurrent() != null ? service.getCurrent().id : 0L,
+                    service != null && service.isPlaying());
+            row.setContentDescription(t.title + ", " + t.artist
+                    + (audibleState == PlayingTrackRules.PLAYING ? ", lecture en cours"
+                       : audibleState == PlayingTrackRules.PAUSED ? ", lecture en pause" : "")
+                    + ". Toucher pour lire, "
                     + (dragPlaylistId != null ? "appui long pour déplacer, " : "appui long pour sélectionner, ")
                     + "glisser horizontalement pour ajouter à la file.");
             return convert;
@@ -3361,7 +3394,27 @@ public final class MainActivity extends Activity {
                 }).start();
     }
 
+    /** Refresh only displayed rows when the audio-service callback changes
+     * the playing track or pauses. No notifyDataSetChanged(), no jump while scrolling. */
+    private void refreshVisibleTrackHighlight() {
+        ListView list = activeTrackList;
+        if (list == null || !(list.getAdapter() instanceof TrackAdapter)) return;
+        TrackAdapter adapter = (TrackAdapter) list.getAdapter();
+        int first = list.getFirstVisiblePosition();
+        int count = list.getChildCount();
+        for (int offset = 0; offset < count; offset++) {
+            int index = first + offset;
+            if (index < 0 || index >= adapter.tracks.size()) continue;
+            View child = list.getChildAt(offset);
+            if (!(child instanceof SwipeTrackRow)) continue;
+            Object tag = child.getTag();
+            if (!(tag instanceof TrackAdapter.Holder)) continue;
+            adapter.bindPlayingState((TrackAdapter.Holder) tag, adapter.tracks.get(index));
+        }
+    }
+
     private void refreshPlayer() {
+        refreshVisibleTrackHighlight();
         if (mini == null || fullOverlay == null) return;
         Track track = service == null ? null : service.getCurrent();
         if (track == null) {

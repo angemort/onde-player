@@ -1,3 +1,14 @@
+# Onde Player 3.9.3 — Titre en cours dans la bibliothèque
+
+- Surbrillance de la ligne du titre en cours avec les couleurs automatiques d'accent de chaque thème.
+- Barre latérale très fine et pictogramme ♫ pendant la lecture ; état plus discret et symbole pause quand le titre est en pause.
+- L'indicateur suit automatiquement les changements de morceaux, la pause et la reprise, sans forcer le défilement ni reconstruire toute la liste.
+- Conservation de la priorité de la sélection multiple : les cases cochées gardent leur propre mise en évidence.
+- Accessibilité : description « lecture en cours » ou « lecture en pause » du titre actif.
+- Réutilisation des lignes ListView prise en charge : aucun marqueur ne doit rester sur une ligne recyclée.
+- Tests des états et de la correspondance des identifiants de titres.
+- Version 3.9.3 / versionCode 22, données et signature inchangées.
+
 # Onde Player 3.9.2 — Vérification des mises à jour simplifiée
 
 - Le menu Mises à jour démarre immédiatement la recherche au lieu d'attendre un clic supplémentaire.
